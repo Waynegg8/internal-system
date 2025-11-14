@@ -1,0 +1,187 @@
+/**
+ * 设计系统变量 - Design Tokens
+ * 统一颜色、阴影、圆角等设计规范
+ */
+
+:root {
+  /* ========== 主色调（Primary Colors） ========== */
+  --color-primary: #1890ff;
+  --color-primary-hover: #40a9ff;
+  --color-primary-active: #096dd9;
+  --color-primary-light-bg: #e6f7ff;
+
+  /* ========== 功能色（Functional Colors） ========== */
+  --color-success: #52c41a;
+  --color-success-bg: #f6ffed;
+  --color-warning: #faad14;
+  --color-warning-bg: #fffbe6;
+  --color-error: #ff4d4f;
+  --color-error-bg: #fff2f0;
+  --color-info: #1890ff;
+  --color-info-bg: #e6f7ff;
+
+  /* ========== 文字颜色层级（Text Colors） ========== */
+  --color-text-primary: #262626;
+  --color-text-regular: #595959;
+  --color-text-secondary: #8c8c8c;
+  --color-text-disabled: #bfbfbf;
+  --color-text-placeholder: #bfbfbf;
+
+  /* ========== 背景颜色系统（Background Colors） ========== */
+  --color-bg-page: #f5f5f5;
+  --color-bg-card: #ffffff;
+  --color-bg-hover: #fafafa;
+  --color-bg-selected: #e6f7ff;
+  --color-bg-disabled: #f5f5f5;
+
+  /* ========== 边框颜色（Border Colors） ========== */
+  --color-border-default: #d9d9d9;
+  --color-border-hover: #40a9ff;
+  --color-border-divider: #f0f0f0;
+  --color-border-disabled: #d9d9d9;
+
+  /* ========== 状态标签颜色（Tag Colors） ========== */
+  --color-tag-pending: #faad14;
+  --color-tag-in-progress: #1890ff;
+  --color-tag-completed: #52c41a;
+  --color-tag-cancelled: #8c8c8c;
+  --color-tag-overdue: #ff4d4f;
+
+  /* ========== 表格行状态颜色 ========== */
+  --color-table-row-normal: #ffffff;
+  --color-table-row-hover: #fafafa;
+  --color-table-row-selected: #e6f7ff;
+  --color-table-row-stripe: #fafafa;
+
+  /* ========== 阴影系统（Shadow System） ========== */
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-button-hover: 0 4px 12px rgba(24, 144, 255, 0.2);
+  --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.08);
+
+  /* ========== 圆角规范（Border Radius） ========== */
+  --radius-base: 8px;
+  --radius-small: 4px;
+  --radius-large: 12px;
+
+  /* ========== 间距系统（8px 网格） ========== */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-xxl: 40px;
+  --spacing-xxxl: 48px;
+
+  /* ========== 过渡动画（Transitions） ========== */
+  --transition-base: all 0.3s ease;
+  --transition-fast: all 0.2s ease;
+  --transition-slow: all 0.4s ease;
+}
+
+/* ========== 全局样式覆盖 ========== */
+
+/* 页面背景色 */
+body {
+  background-color: var(--color-bg-page);
+}
+
+/* 卡片样式优化 */
+.ant-card {
+  border-radius: var(--radius-base);
+  transition: var(--transition-base);
+}
+
+.ant-card-bordered {
+  border: 1px solid var(--color-border-divider);
+}
+
+/* 无边框卡片样式 */
+.ant-card-no-border {
+  border: none;
+  box-shadow: var(--shadow-card);
+  background-color: var(--color-bg-card);
+}
+
+/* 按钮悬停效果 */
+.ant-btn {
+  transition: var(--transition-base);
+  border-radius: var(--radius-base);
+}
+
+.ant-btn-primary:hover {
+  box-shadow: var(--shadow-button-hover);
+}
+
+/* 输入框聚焦效果 */
+.ant-input:focus,
+.ant-input-affix-wrapper:focus,
+.ant-select-focused .ant-select-selector {
+  border-color: var(--color-border-hover);
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+/* 排除工具欄內的輸入框，避免與組件樣式衝突 */
+/* 工具欄內的輸入框由組件樣式完全控制，全局樣式不應影響 */
+.toolbar-input .ant-input-affix-wrapper,
+.toolbar-input .ant-input-affix-wrapper:hover,
+.toolbar-input .ant-input-affix-wrapper:focus,
+.toolbar-input .ant-input-affix-wrapper:focus-within,
+.toolbar-input .ant-input-affix-wrapper-focused {
+  /* 移除全局樣式的影響，讓組件樣式完全控制 */
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 表格行悬停效果 */
+.ant-table-tbody > tr:hover > td {
+  background-color: var(--color-table-row-hover) !important;
+}
+
+/* 选中行样式 */
+.ant-table-tbody > tr.ant-table-row-selected > td {
+  background-color: var(--color-table-row-selected) !important;
+}
+
+/* 分割线样式 */
+.ant-divider {
+  border-color: var(--color-border-divider);
+}
+
+/* 标签颜色映射 */
+.ant-tag {
+  border-radius: var(--radius-small);
+  transition: var(--transition-base);
+}
+
+/* 状态标签颜色类 */
+.tag-pending {
+  color: var(--color-tag-pending);
+  background: var(--color-warning-bg);
+  border-color: var(--color-tag-pending);
+}
+
+.tag-in-progress {
+  color: var(--color-tag-in-progress);
+  background: var(--color-primary-light-bg);
+  border-color: var(--color-tag-in-progress);
+}
+
+.tag-completed {
+  color: var(--color-tag-completed);
+  background: var(--color-success-bg);
+  border-color: var(--color-tag-completed);
+}
+
+.tag-cancelled {
+  color: var(--color-tag-cancelled);
+  background: var(--color-bg-hover);
+  border-color: var(--color-tag-cancelled);
+}
+
+.tag-overdue {
+  color: var(--color-tag-overdue);
+  background: var(--color-error-bg);
+  border-color: var(--color-tag-overdue);
+}
+
+

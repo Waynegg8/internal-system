@@ -1,0 +1,12 @@
+{
+  "name": "tesseract-ocr-mcp-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Tesseract OCR MCP Server (Free & Open Source)",
+  "main": "tesseract-ocr-mcp-server.js",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "tesseract.js": "^5.1.0"
+  }
+}
+

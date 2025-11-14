@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>刪除婚假記錄</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #ff4d4f;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 20px;
+    }
+    button:hover {
+      background: #ff7875;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      font-family: monospace;
+    }
+    .success {
+      background: #f6ffed;
+      border: 1px solid #b7eb8f;
+      color: #389e0d;
+    }
+    .error {
+      background: #fff2f0;
+      border: 1px solid #ffccc7;
+      color: #cf1322;
+    }
+    .info {
+      background: #e6f7ff;
+      border: 1px solid #91d5ff;
+      color: #0958d9;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>刪除婚假記錄</h1>
+    <p>此操作將刪除資料庫中所有婚假（marriage）相關的生活事件記錄。</p>
+    <p><strong>警告：此操作不可恢復！</strong></p>
+    
+    <button id="deleteBtn" onclick="deleteMarriageLeaves()">刪除婚假記錄</button>
+    
+    <div id="result"></div>
+  </div>
+
+  <script>
+    async function deleteMarriageLeaves() {
+      const btn = document.getElementById('deleteBtn');
+      const resultDiv = document.getElementById('result');
+      
+      btn.disabled = true;
+      btn.textContent = '執行中...';
+      resultDiv.innerHTML = '<div class="result info">正在執行刪除操作...</div>';
+      
+      try {
+        const response = await fetch('/api/v2/admin/delete-marriage-leaves', {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          const deletedCount = data.data?.deleted || 0;
+          const records = data.data?.records || [];
+          
+          let html = `<div class="result success">`;
+          html += `<strong>✓ 刪除成功！</strong><br>`;
+          html += `已刪除 ${deletedCount} 筆婚假記錄<br><br>`;
+          
+          if (records.length > 0) {
+            html += `<strong>刪除的記錄詳情：</strong><br>`;
+            records.forEach((record, index) => {
+              html += `${index + 1}. 記錄 ID: ${record.grant_id}, 用戶 ID: ${record.user_id}, `;
+              html += `假別: ${record.leave_type}, 授予天數: ${record.days_granted}, `;
+              html += `已使用: ${record.days_used}, 剩餘: ${record.days_remaining}<br>`;
+            });
+          }
+          
+          html += `</div>`;
+          resultDiv.innerHTML = html;
+        } else {
+          resultDiv.innerHTML = `<div class="result error">
+            <strong>✗ 刪除失敗</strong><br>
+            錯誤: ${data.message || data.error || '未知錯誤'}<br>
+            詳細資訊: ${JSON.stringify(data, null, 2)}
+          </div>`;
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="result error">
+          <strong>✗ 請求錯誤</strong><br>
+          ${error.message}
+        </div>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '刪除婚假記錄';
+      }
+    }
+  </script>
+</body>
+</html>
+
+
+
+

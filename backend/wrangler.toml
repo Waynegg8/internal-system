@@ -1,0 +1,41 @@
+# Cloudflare Worker 配置
+name = "horgoscpa-api-v2"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+account_id = "4ad0a8042beb2d218bd6edf39aee0fea"
+
+# 路由配置 - 只處理 API 路徑，其他路徑由 Pages 處理
+routes = [
+  { pattern = "v2.horgoscpa.com/api/v2/*", zone_name = "horgoscpa.com" },
+  { pattern = "v2.www.horgoscpa.com/api/v2/*", zone_name = "horgoscpa.com" }
+]
+
+[vars]
+SESSION_COOKIE_NAME = "session"
+SESSION_TTL_SECONDS = "2592000"
+APP_ENV = "dev"
+
+# D1 数据库 - 新系統使用新數據庫（不影響現有系統）
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "horgoscpa-db-v2"
+database_id = "433ec7df-19c8-41b3-a8b6-0216ba866fb1"
+migrations_dir = "migrations"
+
+# R2 Storage（文档存储）
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "horgoscpa-documents"
+
+# KV Storage（快速缓存）
+[[kv_namespaces]]
+binding = "CACHE"
+id = "0b5186bacfc24815a04a9240d6e7ba45"
+
+# Cron Triggers（定时任务）
+[triggers]
+crons = [
+  "30 0 * * *",  # 每天 00:30 UTC（任務自動生成）
+  "0 18 * * *"   # 每天 18:00 UTC（台灣 02:00，所有預先計算：薪資、報表、儀表板）
+]
+

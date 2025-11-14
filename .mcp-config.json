@@ -1,0 +1,36 @@
+{
+  "mcpServers": {
+    "horgoscpa-api": {
+      "url": "https://v2.horgoscpa.com/api/v2/mcp",
+      "command": null,
+      "args": null,
+      "env": {},
+      "description": "霍爾果斯會計師事務所 MCP 伺服器",
+      "endpoints": {
+        "tools": "GET /mcp/tools",
+        "query": "POST /mcp/query",
+        "user": "GET /mcp/user",
+        "clients": "GET /mcp/clients",
+        "tasks": "GET /mcp/tasks",
+        "stats": "GET /mcp/stats",
+        "knowledge": "GET /mcp/knowledge",
+        "schema": "GET /mcp/schema",
+        "config": "GET /mcp/config"
+      }
+    },
+    "spec-workflow": {
+      "command": "npx",
+      "args": [
+        "@pimzino/spec-workflow-mcp@latest",
+        "."
+      ],
+      "env": {},
+      "description": "Spec Workflow MCP 伺服器 - 用於創建和管理規範文件",
+      "cwd": "."
+    }
+  }
+}
+
+
+
+

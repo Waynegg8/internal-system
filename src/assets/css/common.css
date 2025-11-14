@@ -1,0 +1,204 @@
+/**
+ * 全局樣式
+ */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  width: 100%;
+  height: 100vh;
+}
+
+/* ========== 通用工具類 ========== */
+
+/* 文字对齐 */
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-left {
+  text-align: left;
+}
+
+/* ========== 间距工具类（基于 8px 网格系统） ========== */
+
+/* Margin Top */
+.mt-0 { margin-top: 0; }
+.mt-xs { margin-top: 4px; }
+.mt-sm { margin-top: 8px; }
+.mt-md { margin-top: 16px; }
+.mt-lg { margin-top: 24px; }
+.mt-xl { margin-top: 32px; }
+.mt-xxl { margin-top: 40px; }
+.mt-xxxl { margin-top: 48px; }
+
+/* Margin Bottom */
+.mb-0 { margin-bottom: 0; }
+.mb-xs { margin-bottom: 4px; }
+.mb-sm { margin-bottom: 8px; }
+.mb-md { margin-bottom: 16px; }
+.mb-lg { margin-bottom: 24px; }
+.mb-xl { margin-bottom: 32px; }
+.mb-xxl { margin-bottom: 40px; }
+.mb-xxxl { margin-bottom: 48px; }
+
+/* Margin Left */
+.ml-0 { margin-left: 0; }
+.ml-xs { margin-left: 4px; }
+.ml-sm { margin-left: 8px; }
+.ml-md { margin-left: 16px; }
+.ml-lg { margin-left: 24px; }
+.ml-xl { margin-left: 32px; }
+.ml-xxl { margin-left: 40px; }
+.ml-xxxl { margin-left: 48px; }
+
+/* Margin Right */
+.mr-0 { margin-right: 0; }
+.mr-xs { margin-right: 4px; }
+.mr-sm { margin-right: 8px; }
+.mr-md { margin-right: 16px; }
+.mr-lg { margin-right: 24px; }
+.mr-xl { margin-right: 32px; }
+.mr-xxl { margin-right: 40px; }
+.mr-xxxl { margin-right: 48px; }
+
+/* Margin X (Horizontal) */
+.mx-0 { margin-left: 0; margin-right: 0; }
+.mx-xs { margin-left: 4px; margin-right: 4px; }
+.mx-sm { margin-left: 8px; margin-right: 8px; }
+.mx-md { margin-left: 16px; margin-right: 16px; }
+.mx-lg { margin-left: 24px; margin-right: 24px; }
+.mx-xl { margin-left: 32px; margin-right: 32px; }
+.mx-xxl { margin-left: 40px; margin-right: 40px; }
+.mx-xxxl { margin-left: 48px; margin-right: 48px; }
+
+/* Margin Y (Vertical) */
+.my-0 { margin-top: 0; margin-bottom: 0; }
+.my-xs { margin-top: 4px; margin-bottom: 4px; }
+.my-sm { margin-top: 8px; margin-bottom: 8px; }
+.my-md { margin-top: 16px; margin-bottom: 16px; }
+.my-lg { margin-top: 24px; margin-bottom: 24px; }
+.my-xl { margin-top: 32px; margin-bottom: 32px; }
+.my-xxl { margin-top: 40px; margin-bottom: 40px; }
+.my-xxxl { margin-top: 48px; margin-bottom: 48px; }
+
+/* Padding */
+.p-0 { padding: 0; }
+.p-xs { padding: 4px; }
+.p-sm { padding: 8px; }
+.p-md { padding: 16px; }
+.p-lg { padding: 24px; }
+.p-xl { padding: 32px; }
+.p-xxl { padding: 40px; }
+.p-xxxl { padding: 48px; }
+
+/* Padding Top */
+.pt-0 { padding-top: 0; }
+.pt-xs { padding-top: 4px; }
+.pt-sm { padding-top: 8px; }
+.pt-md { padding-top: 16px; }
+.pt-lg { padding-top: 24px; }
+.pt-xl { padding-top: 32px; }
+.pt-xxl { padding-top: 40px; }
+.pt-xxxl { padding-top: 48px; }
+
+/* Padding Bottom */
+.pb-0 { padding-bottom: 0; }
+.pb-xs { padding-bottom: 4px; }
+.pb-sm { padding-bottom: 8px; }
+.pb-md { padding-bottom: 16px; }
+.pb-lg { padding-bottom: 24px; }
+.pb-xl { padding-bottom: 32px; }
+.pb-xxl { padding-bottom: 40px; }
+.pb-xxxl { padding-bottom: 48px; }
+
+/* Padding Left */
+.pl-0 { padding-left: 0; }
+.pl-xs { padding-left: 4px; }
+.pl-sm { padding-left: 8px; }
+.pl-md { padding-left: 16px; }
+.pl-lg { padding-left: 24px; }
+.pl-xl { padding-left: 32px; }
+.pl-xxl { padding-left: 40px; }
+.pl-xxxl { padding-left: 48px; }
+
+/* Padding Right */
+.pr-0 { padding-right: 0; }
+.pr-xs { padding-right: 4px; }
+.pr-sm { padding-right: 8px; }
+.pr-md { padding-right: 16px; }
+.pr-lg { padding-right: 24px; }
+.pr-xl { padding-right: 32px; }
+.pr-xxl { padding-right: 40px; }
+.pr-xxxl { padding-right: 48px; }
+
+/* Padding X (Horizontal) */
+.px-0 { padding-left: 0; padding-right: 0; }
+.px-xs { padding-left: 4px; padding-right: 4px; }
+.px-sm { padding-left: 8px; padding-right: 8px; }
+.px-md { padding-left: 16px; padding-right: 16px; }
+.px-lg { padding-left: 24px; padding-right: 24px; }
+.px-xl { padding-left: 32px; padding-right: 32px; }
+.px-xxl { padding-left: 40px; padding-right: 40px; }
+.px-xxxl { padding-left: 48px; padding-right: 48px; }
+
+/* Padding Y (Vertical) */
+.py-0 { padding-top: 0; padding-bottom: 0; }
+.py-xs { padding-top: 4px; padding-bottom: 4px; }
+.py-sm { padding-top: 8px; padding-bottom: 8px; }
+.py-md { padding-top: 16px; padding-bottom: 16px; }
+.py-lg { padding-top: 24px; padding-bottom: 24px; }
+.py-xl { padding-top: 32px; padding-bottom: 32px; }
+.py-xxl { padding-top: 40px; padding-bottom: 40px; }
+.py-xxxl { padding-top: 48px; padding-bottom: 48px; }
+
+/* Gap (for flex/grid layouts) */
+.gap-0 { gap: 0; }
+.gap-xs { gap: 4px; }
+.gap-sm { gap: 8px; }
+.gap-md { gap: 16px; }
+.gap-lg { gap: 24px; }
+.gap-xl { gap: 32px; }
+.gap-xxl { gap: 40px; }
+.gap-xxxl { gap: 48px; }
+
+/* ========== 过渡动画工具类 ========== */
+.transition-base {
+  transition: all 0.3s ease;
+}
+
+.transition-fast {
+  transition: all 0.2s ease;
+}
+
+.transition-slow {
+  transition: all 0.4s ease;
+}
+
+/* ========== 兼容旧版本（保持向后兼容） ========== */
+.mt-1 { margin-top: 8px; }
+.mt-2 { margin-top: 16px; }
+.mt-3 { margin-top: 24px; }
+
+.mb-1 { margin-bottom: 8px; }
+.mb-2 { margin-bottom: 16px; }
+.mb-3 { margin-bottom: 24px; }
+
+.p-1 { padding: 8px; }
+.p-2 { padding: 16px; }
+.p-3 { padding: 24px; }
+

@@ -1,0 +1,36 @@
+{
+  "mcpServers": {
+    "horgoscpa-database": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\miama\\Desktop\\system-new\\backend\\src\\mcp\\http-bridge.js"
+      ],
+      "env": {
+        "MCP_API_URL": "https://v2.horgoscpa.com/api/v2"
+      }
+    },
+    "horgoscpa-logs": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\miama\\Desktop\\system-new\\backend\\src\\mcp\\logs-bridge.js"
+      ],
+      "env": {
+        "WORKER_NAME": "horgoscpa-api-v2",
+        "WORKER_DIR": "C:\\Users\\miama\\Desktop\\system-new\\backend"
+      }
+    },
+    "cloudflare-management": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\miama\\Desktop\\system-new\\backend\\src\\mcp\\cloudflare-management-bridge.js"
+      ],
+      "env": {
+        "WORKER_NAME": "horgoscpa-api-v2",
+        "WORKER_DIR": "C:\\Users\\miama\\Desktop\\system-new\\backend",
+        "PAGES_PROJECT": "horgoscpa-internal-v2",
+        "ACCOUNT_ID": "4ad0a8042beb2d218bd6edf39aee0fea"
+      }
+    }
+  }
+}
+

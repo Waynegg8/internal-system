@@ -1,0 +1,43 @@
+{
+  "name": "horgoscpa-api-v2",
+  "version": "2.0.0",
+  "description": "霍爾果斯會計師事務所 API v2 - 模組化重構版本",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "dev:local": "wrangler dev --port 8787 --local",
+    "dev:remote": "wrangler dev --port 8787 --remote",
+    "deploy": "wrangler deploy",
+    "deploy:full": "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1",
+    "deploy:verify": "powershell -ExecutionPolicy Bypass -File scripts/deploy-verify.ps1",
+    "migrate": "wrangler d1 migrations apply DATABASE",
+    "migrate:local": "wrangler d1 migrations apply DATABASE --local",
+    "migrate:remote": "wrangler d1 migrations apply DATABASE --remote",
+    "migrate:list": "wrangler d1 migrations list DATABASE --local",
+    "consolidate-migrations": "node scripts/consolidate-migrations.js",
+    "validate-migrations": "node scripts/validate-migrations.js",
+    "migrate-full": "npm run consolidate-migrations && npm run validate-migrations",
+    "migrate-auto": "powershell -ExecutionPolicy Bypass -File scripts/auto-migrate.ps1",
+    "consolidate": "powershell -ExecutionPolicy Bypass -File scripts/run-consolidate.ps1",
+    "validate": "powershell -ExecutionPolicy Bypass -File scripts/run-validation.ps1",
+    "seed:local": "node scripts/seed-test-data.js --local",
+    "seed:remote": "node scripts/seed-test-data.js --remote",
+    "test:api:local": "node scripts/test-api-endpoints.js --local",
+    "test:api:remote": "node scripts/test-api-endpoints.js --remote",
+    "test:integrity:local": "node scripts/test-data-integrity.js --local",
+    "test:integrity:remote": "node scripts/test-data-integrity.js --remote",
+    "test:full:local": "powershell -ExecutionPolicy Bypass -File scripts/run-full-tests.ps1 --local",
+    "test:full:remote": "powershell -ExecutionPolicy Bypass -File scripts/run-full-tests.ps1 --remote",
+    "test:mcp:local": "node scripts/test-mcp-endpoints.js",
+    "test:mcp:remote": "set API_URL=https://v2.horgoscpa.com/api/v2 && node scripts/test-mcp-endpoints.js",
+    "mcp:bridge": "node src/mcp/http-bridge.js",
+    "mcp:logs": "node src/mcp/logs-bridge.js",
+    "mcp:cloudflare": "node src/mcp/cloudflare-management-bridge.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.47.0"
+  }
+}

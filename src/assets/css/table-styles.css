@@ -1,0 +1,174 @@
+/**
+ * 表格样式规范
+ * 统一所有表格的样式，避免水平滚动，优化列宽和字体大小
+ */
+
+/* ========== 响应式表格基础样式 ========== */
+.responsive-table {
+  width: 100%;
+}
+
+.responsive-table :deep(.ant-table) {
+  font-size: 14px;
+}
+
+.responsive-table :deep(.ant-table-container) {
+  overflow-x: visible !important;
+}
+
+/* 表头样式 */
+.responsive-table :deep(.ant-table-thead > tr > th) {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-hover);
+  padding: 12px 8px;
+  white-space: nowrap;
+}
+
+/* 表体样式 */
+.responsive-table :deep(.ant-table-tbody > tr > td) {
+  padding: 12px 8px;
+  font-size: 14px;
+  color: var(--color-text-regular);
+  word-break: break-word;
+}
+
+/* 行悬停效果 */
+.responsive-table :deep(.ant-table-tbody > tr:hover > td) {
+  background-color: var(--color-table-row-hover);
+}
+
+/* 选中行样式 */
+.responsive-table :deep(.ant-table-tbody > tr.ant-table-row-selected > td) {
+  background-color: var(--color-table-row-selected);
+}
+
+/* ========== 表格单元格样式 ========== */
+
+/* 等宽字体单元格（用于编号、ID等） */
+.table-cell-mono {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* 链接单元格 */
+.table-cell-link {
+  color: var(--color-primary);
+  transition: var(--transition-base);
+  text-decoration: none;
+}
+
+.table-cell-link:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+/* 金额单元格 */
+.table-cell-amount {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  text-align: right;
+}
+
+.table-cell-amount.positive {
+  color: var(--color-success);
+}
+
+.table-cell-amount.negative {
+  color: var(--color-error);
+}
+
+/* 状态单元格 */
+.table-cell-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ========== 标签样式 ========== */
+.responsive-table :deep(.ant-tag) {
+  margin: 0 2px 4px 0;
+  font-size: 12px;
+  padding: 2px 8px;
+  line-height: 20px;
+  border-radius: var(--radius-small);
+}
+
+/* ========== 操作按钮样式 ========== */
+.responsive-table :deep(.ant-btn-link) {
+  padding: 0 4px;
+  height: auto;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.responsive-table :deep(.ant-space) {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ========== 表格列宽规范 ========== */
+/* 
+列宽建议：
+- 编号/ID: 80-100px
+- 名称/标题: 15-25% (使用百分比，最小宽度 120px)
+- 短文本: 100-120px
+- 中等文本: 150-180px
+- 长文本: 200-250px (使用 ellipsis)
+- 数字/金额: 100-120px (右对齐)
+- 状态标签: 100-120px
+- 日期: 100-120px
+- 操作按钮: 100-150px (根据按钮数量调整)
+*/
+
+/* ========== 响应式断点 ========== */
+/* 
+使用 Ant Design 的响应式断点：
+- xs: < 576px
+- sm: >= 576px
+- md: >= 768px
+- lg: >= 992px
+- xl: >= 1200px
+- xxl: >= 1600px
+
+在列定义中使用 responsive 属性：
+responsive: ['lg'] - 在 lg 及以上显示
+responsive: ['xl'] - 在 xl 及以上显示
+*/
+
+/* 小屏幕优化 */
+@media (max-width: 768px) {
+  .responsive-table :deep(.ant-table-thead > tr > th),
+  .responsive-table :deep(.ant-table-tbody > tr > td) {
+    padding: 8px 4px;
+    font-size: 13px;
+  }
+  
+  .responsive-table :deep(.ant-table-thead > tr > th) {
+    font-size: 12px;
+  }
+}
+
+/* ========== 表格无边框样式 ========== */
+.responsive-table-no-border :deep(.ant-table) {
+  border: none;
+}
+
+.responsive-table-no-border :deep(.ant-table-thead > tr > th) {
+  border-bottom: 1px solid var(--color-border-divider);
+}
+
+.responsive-table-no-border :deep(.ant-table-tbody > tr > td) {
+  border-bottom: 1px solid var(--color-border-divider);
+}
+
+.responsive-table-no-border :deep(.ant-table-tbody > tr:last-child > td) {
+  border-bottom: none;
+}
+
+
+
+
+
