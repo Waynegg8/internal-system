@@ -7,6 +7,20 @@
       :label-col="{ span: 6 }"
       :wrapper-col="{ span: 18 }"
     >
+      <a-form-item label="服務類型" name="service_type">
+        <a-select
+          v-model:value="formData.service_type"
+          placeholder="請選擇服務類型"
+        >
+          <a-select-option value="recurring">週期性（Recurring）</a-select-option>
+          <a-select-option value="one_off">一次性（One-off）</a-select-option>
+        </a-select>
+        <template #extra>
+          <span style="color: #666; font-size: 12px">
+            💡 週期性：會定期自動產生任務；一次性：僅單次執行。
+          </span>
+        </template>
+      </a-form-item>
       <a-form-item label="服務名稱" name="service_name">
         <a-input
           v-model:value="formData.service_name"
@@ -80,7 +94,8 @@ const formTitle = computed(() => {
 // 表單數據
 const formData = ref({
   service_name: '',
-  service_sop_id: null
+  service_sop_id: null,
+  service_type: 'recurring'
 })
 
 // 表單驗證規則
@@ -88,6 +103,19 @@ const formRules = {
   service_name: [
     { required: true, message: '請輸入服務名稱', trigger: 'blur' },
     { max: 100, message: '服務名稱不能超過 100 個字符', trigger: 'blur' }
+  ],
+  service_type: [
+    { required: true, message: '請選擇服務類型', trigger: 'change' },
+    {
+      validator: (rule, value) => {
+        if (!value) return Promise.reject(new Error('請選擇服務類型'))
+        if (!['recurring', 'one_off'].includes(value)) {
+          return Promise.reject(new Error('服務類型無效'))
+        }
+        return Promise.resolve()
+      },
+      trigger: 'change'
+    }
   ],
   service_sop_id: [
     {
@@ -114,7 +142,8 @@ watch(
     if (newService) {
       formData.value = {
         service_name: newService.service_name || '',
-        service_sop_id: newService.service_sop_id || null
+        service_sop_id: newService.service_sop_id || null,
+        service_type: newService.service_type || 'recurring'
       }
     } else {
       resetForm()
@@ -127,7 +156,8 @@ watch(
 const resetForm = () => {
   formData.value = {
     service_name: '',
-    service_sop_id: null
+    service_sop_id: null,
+    service_type: 'recurring'
   }
   formRef.value?.resetFields()
 }
@@ -140,7 +170,8 @@ const handleSubmit = async () => {
     // 準備提交數據
     const submitData = {
       service_name: formData.value.service_name.trim(),
-      service_sop_id: formData.value.service_sop_id || null
+      service_sop_id: formData.value.service_sop_id || null,
+      service_type: formData.value.service_type
     }
     
     emit('submit', submitData, !!props.editingService)

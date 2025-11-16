@@ -174,16 +174,8 @@
       <!-- 股東持股資訊 -->
       <a-row>
         <a-col :span="24">
-          <a-form-item label="股東持股資訊（JSON 格式）">
-            <a-textarea
-              v-model:value="shareholdersJson"
-              :rows="4"
-              placeholder='例如：[{"name":"張三","share_percentage":50,"share_count":1000,"share_amount":1000000,"share_type":"普通股"}]'
-              @blur="handleShareholdersChange"
-            />
-            <div class="form-help-text" style="margin-top: 4px; color: #6b7280; font-size: 12px;">
-              請輸入 JSON 格式的股東持股資訊，包含：股東姓名、持股比例(%)、持股數、持股金額、持股類型
-            </div>
+          <a-form-item>
+            <ShareholdersEditor v-model="store.formData.shareholders" />
           </a-form-item>
         </a-col>
       </a-row>
@@ -191,16 +183,8 @@
       <!-- 董監事資訊 -->
       <a-row>
         <a-col :span="24">
-          <a-form-item label="董監事資訊（JSON 格式）">
-            <a-textarea
-              v-model:value="directorsSupervisorsJson"
-              :rows="4"
-              placeholder='例如：[{"name":"李四","position":"董事","term_start":"2024-01-01","term_end":"2026-12-31","is_current":true}]'
-              @blur="handleDirectorsSupervisorsChange"
-            />
-            <div class="form-help-text" style="margin-top: 4px; color: #6b7280; font-size: 12px;">
-              請輸入 JSON 格式的董監事資訊，包含：姓名、職務、任期開始日期、任期結束日期、是否為現任
-            </div>
+          <a-form-item>
+            <DirectorsSupervisorsEditor v-model="store.formData.directors_supervisors" />
           </a-form-item>
         </a-col>
       </a-row>
@@ -246,11 +230,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useClientAddStore } from '@/stores/clientAdd'
 import { clientFormRules } from '@/utils/validation'
 import { usePageAlert } from '@/composables/usePageAlert'
 import ClientAddTagsModal from '@/components/clients/ClientAddTagsModal.vue'
+import ShareholdersEditor from '@/components/clients/ShareholdersEditor.vue'
+import DirectorsSupervisorsEditor from '@/components/clients/DirectorsSupervisorsEditor.vue'
 
 const store = useClientAddStore()
 const { successMessage, errorMessage, showSuccess, showError } = usePageAlert()
@@ -258,65 +244,6 @@ const formRef = ref(null)
 
 // 標籤 Modal 顯示狀態
 const isTagsModalVisible = ref(false)
-
-// JSON 欄位的字符串表示（用於 textarea 編輯）
-const shareholdersJson = ref('')
-const directorsSupervisorsJson = ref('')
-
-// 處理股東持股資訊 JSON 轉換
-const handleShareholdersChange = () => {
-  try {
-    if (shareholdersJson.value && shareholdersJson.value.trim()) {
-      const parsed = JSON.parse(shareholdersJson.value)
-      store.formData.shareholders = parsed
-    } else {
-      store.formData.shareholders = null
-    }
-  } catch (error) {
-    showError('股東持股資訊 JSON 格式錯誤，請檢查輸入')
-    console.error('JSON parse error:', error)
-  }
-}
-
-// 處理董監事資訊 JSON 轉換
-const handleDirectorsSupervisorsChange = () => {
-  try {
-    if (directorsSupervisorsJson.value && directorsSupervisorsJson.value.trim()) {
-      const parsed = JSON.parse(directorsSupervisorsJson.value)
-      store.formData.directors_supervisors = parsed
-    } else {
-      store.formData.directors_supervisors = null
-    }
-  } catch (error) {
-    showError('董監事資訊 JSON 格式錯誤，請檢查輸入')
-    console.error('JSON parse error:', error)
-  }
-}
-
-// 初始化 JSON 欄位（從 store 中讀取）
-watch(() => store.formData.shareholders, (val) => {
-  if (val) {
-    try {
-      shareholdersJson.value = typeof val === 'string' ? val : JSON.stringify(val, null, 2)
-    } catch (e) {
-      shareholdersJson.value = ''
-    }
-  } else {
-    shareholdersJson.value = ''
-  }
-}, { immediate: true })
-
-watch(() => store.formData.directors_supervisors, (val) => {
-  if (val) {
-    try {
-      directorsSupervisorsJson.value = typeof val === 'string' ? val : JSON.stringify(val, null, 2)
-    } catch (e) {
-      directorsSupervisorsJson.value = ''
-    }
-  } else {
-    directorsSupervisorsJson.value = ''
-  }
-}, { immediate: true })
 
 // 用戶選項（用於下拉選單）
 const userOptions = computed(() => {

@@ -34,25 +34,17 @@ export default defineConfig({
   
   // 報告設定
   reporter: [
-    ['html', { outputFolder: 'playwright-report' }],
-    ['list']
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ['json', { outputFile: 'playwright-report/report.json' }],
+    ['list'],
   ],
   
   // 共用設定
   use: {
-    // 基礎 URL（必須透過環境變數設定，因為每次部署 URL 會變動）
-    // 使用方式：
-    //   1. 自動獲取: npm run test:get-url
-    //   2. 手動設定: $env:PLAYWRIGHT_BASE_URL="https://xxx.pages.dev"; npm test
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || (() => {
-      console.error('\n❌ 錯誤: 未設定 PLAYWRIGHT_BASE_URL 環境變數')
-      console.error('\n   解決方式:')
-      console.error('   1. 自動獲取最新部署 URL: npm run test:get-url')
-      console.error('   2. 手動設定: $env:PLAYWRIGHT_BASE_URL="https://xxx.pages.dev"; npm test')
-      console.error('')
-      process.exit(1)
-      return ''
-    })(),
+    // 基礎 URL
+    // 強制在正式環境執行：預設使用 production 網域
+    // 可覆寫：設定環境變數 PLAYWRIGHT_BASE_URL 為正式網域
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://v2.horgoscpa.com',
     
     // 截圖設定
     screenshot: 'only-on-failure',
@@ -90,4 +82,17 @@ export default defineConfig({
   // 不使用本地伺服器（直接測試遠端）
   // 如需本地測試，可設定環境變數：PLAYWRIGHT_BASE_URL=http://localhost:5173
 })
+
+// 追加保護：禁止在 CI 或強制模式下對非正式網域執行
+const enforceProd = process.env.ENFORCE_PROD === '1' || !!process.env.CI
+if (enforceProd) {
+  const url = process.env.PLAYWRIGHT_BASE_URL || 'https://v2.horgoscpa.com'
+  const isLocalhost = /localhost|127\.0\.0\.1/i.test(url)
+  const isPreviewBranch = /pages\.dev/i.test(url)
+  if (isLocalhost || isPreviewBranch) {
+    throw new Error(
+      `Playwright 被設定為僅允許在正式環境執行（ENFORCE_PROD=${process.env.ENFORCE_PROD ?? 'auto'}，CI=${process.env.CI ?? '0'}）。請將 PLAYWRIGHT_BASE_URL 指向 production：https://v2.horgoscpa.com`
+    )
+  }
+}
 

@@ -1,3 +1,152 @@
+# 技術棧（已核對實際依賴與配置）
+
+本文件依據實際 `package.json`、`vite.config.js`、`playwright.config.ts` 與 `backend/wrangler.toml` 產生，僅記載已使用之技術與準確版本範圍（不列未使用技術）。
+
+## 核心總覽
+- 前端：Vue 3、Ant Design Vue、Pinia、Vue Router、Axios、Day.js、Quill、pdfjs-dist
+- 構建：Vite 5、@vitejs/plugin-vue、unplugin-auto-import、unplugin-vue-components、Terser
+- 測試：Playwright（E2E，正式環境 URL 強制）
+- 託管：Cloudflare Pages（靜態站點 + Pages Functions）
+- 後端：Cloudflare Workers（API v2），Wrangler 管理
+- 數據層：Cloudflare D1（SQL）、R2（物件儲存）、KV（快取）
+- 排程：Workers Cron Triggers（每日 00:30 UTC、18:00 UTC）
+- 自動化與工具：Spec Workflow MCP、MCP SDK、Tesseract.js（OCR 工具）
+
+## 版本與依賴（來源：根目錄 package.json）
+Frontend 依賴：
+- @ant-design/icons-vue: ^7.0.1
+- ant-design-vue: ^4.0.0
+- axios: ^1.6.2
+- dayjs: ^1.11.10
+- pdfjs-dist: ^5.4.394
+- pinia: ^2.1.7
+- quill: ^2.0.3
+- quill-better-table: ^1.2.10
+- vue: ^3.3.4
+- vue-router: ^4.2.5
+
+Frontend 開發依賴：
+- @modelcontextprotocol/sdk: ^1.0.4
+- @playwright/test: ^1.40.0
+- @pimzino/spec-workflow-mcp: ^2.0.6
+- @types/node: ^20.10.5
+- @vitejs/plugin-vue: ^4.5.0
+- terser: ^5.44.1
+- tesseract.js: ^5.1.0
+- typescript: ^5.3.3
+- unplugin-auto-import: ^20.2.0
+- unplugin-vue-components: ^30.0.0
+- vite: ^5.0.8
+
+Backend 依賴（來源：backend/package.json）：
+- @modelcontextprotocol/sdk: ^0.5.0
+- undici: ^5.29.0
+
+Backend 開發依賴：
+- wrangler: ^4.47.0
+
+版本說明：
+- MCP SDK 在前端工具鏈使用 ^1.0.4，在後端 Worker 使用 ^0.5.0（後端橋接/管理腳本採用既有穩定版）。兩者用途不同，並非衝突。
+- Playwright 僅作為 E2E 測試框架，不參與執行時。
+
+## 前端架構
+- 框架：Vue 3（組件式、Composition API）
+- UI 元件庫：Ant Design Vue 4（按需載入，`unplugin-vue-components` + `AntDesignVueResolver`）
+- 狀態管理：Pinia
+- 路由：Vue Router 4
+- HTTP：Axios
+- 日期：Day.js
+- 富文本：Quill（含 quill-better-table）
+- PDF 檢視：pdfjs-dist
+- 模組別名：`@` 指向 `src`（見 `vite.config.js`）
+- 建置：Vite 5（`@vitejs/plugin-vue`，多組件/模組手動 chunk 拆分）
+
+Vite 重點配置（已核對 `vite.config.js`）：
+- Auto Import：`vue`、`vue-router`、`pinia`
+- Components Resolver：Ant Design Vue，`importStyle: false`
+- 手動分包策略：依第三方庫與業務模塊（e.g. `antd-icons`、`vue-core`、`views-*`、`components-*`、`api`、`utils`）
+- 構建優化：`minify: esbuild`、`target: es2015`、`cssCodeSplit: true`
+
+## 託管與邊緣層
+- Cloudflare Pages：提供前端靜態檔案與 Pages Functions（目錄 `functions/`）
+- Pages Functions：處理邊緣路由/中介（`functions/_middleware.js`、`functions/api/...`）
+- 正式網域（測試基準）：`https://horgoscpa-internal-v2.pages.dev`
+  - Playwright `baseURL` 預設指向上述正式域名（見 `playwright.config.ts`）
+
+## 後端（API v2）
+- 運行環境：Cloudflare Workers（`backend/`）
+- Router/Handlers：位於 `backend/src/router/**`、`backend/src/handlers/**`
+- 發佈與管理：Wrangler（`wrangler.toml`、scripts）
+- 路由規則（`wrangler.toml`）：
+  - `v2.horgoscpa.com/api/v2/*`（同 zone `horgoscpa.com`）
+  - `v2.www.horgoscpa.com/api/v2/*`
+- 兼容日期：`2024-01-01`
+- 依賴：`undici`（HTTP 客戶端）
+
+資料與快取（`wrangler.toml`）：
+- D1：`DATABASE`（`horgoscpa-db-v2`，遷移目錄 `backend/migrations`）
+- R2：`R2_BUCKET`（`horgoscpa-documents`）
+- KV：`CACHE`（namespace id 已配置）
+- Cron：每日 00:30 UTC 與 18:00 UTC（預先計算任務、薪資、報表、儀表板）
+
+## 測試
+- Playwright（`@playwright/test`）：
+  - `baseURL`: `process.env.PLAYWRIGHT_BASE_URL || https://horgoscpa-internal-v2.pages.dev`
+  - 強制保護：CI 或 `ENFORCE_PROD=1` 時禁止對非正式域名執行
+  - 輸出報表：`playwright-report/`（含 `report.json`、HTML 報告）
+
+## 自動化與開發工具
+- Spec Workflow MCP：`@pimzino/spec-workflow-mcp`（Dashboard/Server 指令見根 `package.json` scripts）
+- MCP SDK：前端工具鏈 ^1.0.4、後端橋接 ^0.5.0
+- Tesseract.js：^5.1.0（OCR 工具用途）
+
+## 架構圖
+
+```mermaid
+flowchart LR
+  subgraph Client["Browser Client"]
+  end
+
+  Client -->|HTTP/HTTPS| Pages["Cloudflare Pages (Static + Pages Functions)"]
+  Pages -->|Edge Routing / Functions| Worker["Cloudflare Worker API v2"]
+
+  subgraph DataPlane["Data & Cache"]
+    D1["Cloudflare D1 (SQL)"]
+    KV["Cloudflare KV (Cache)"]
+    R2["Cloudflare R2 (Object Storage)"]
+  end
+
+  Worker <---> D1
+  Worker <---> KV
+  Worker <---> R2
+
+  subgraph Schedules["Cron Triggers"]
+    Cron1["00:30 UTC"]
+    Cron2["18:00 UTC"]
+  end
+  Cron1 --> Worker
+  Cron2 --> Worker
+```
+
+## 關鍵技術決策
+- Vue 3 + Ant Design Vue：提升生產力與一致性；配合按需載入降低體積。
+- Vite 5：快速開發與最佳化構建；手動分包對大型模塊更可控。
+- 分層託管：前端採 Cloudflare Pages；後端獨立 Workers（清晰邊界、可獨立擴展與部署）。
+- 資料層雲端化：D1（交易/結構化）、R2（檔案）、KV（快取）組合滿足成本與延遲需求。
+- 嚴格 E2E 測試：Playwright 僅針對正式域名，避免環境不一致。
+- MCP 生產力增強：規格、審批與自動化流程可追溯，避免散失。
+
+## 風險與相容性
+- MCP SDK 版本差異：前後端用途不同且各自穩定，需避免混用 API 類型。
+- Cloudflare 兼容日期：升級需評估 Workers 行為變更。
+- Vite/插件大版本升級：需一併驗證 AntD 按需載入與手動分包策略。
+
+## 參考檔案
+- `package.json`、`backend/package.json`
+- `vite.config.js`
+- `playwright.config.ts`
+- `backend/wrangler.toml`
+
 # Technology Stack
 
 ## Project Type

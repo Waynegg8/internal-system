@@ -16,6 +16,38 @@ import {
 // API 基礎 URL
 const API_BASE_URL = process.env.MCP_API_URL || "https://v2.horgoscpa.com/api/v2";
 
+// 取得可用的 fetch（Node 18 以下使用 undici 作為後援）
+let runtimeFetch = globalThis.fetch;
+async function ensureFetch() {
+  if (!runtimeFetch) {
+    try {
+      const undici = await import("undici");
+      runtimeFetch = undici.fetch;
+    } catch (e) {
+      // 保持為 undefined，稍後呼叫時會有明確錯誤訊息
+    }
+  }
+  if (!runtimeFetch) {
+    throw new Error("fetch 不可用，請使用 Node 18+ 或安裝 undici 依賴");
+  }
+  return runtimeFetch;
+}
+
+/**
+ * 具超時的安全 fetch，避免 MCP 初始化時因外部 API 無回應而卡住
+ */
+async function safeFetch(url, options = {}, timeoutMs = 3000) {
+  const fetchImpl = await ensureFetch();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /**
  * 建立 MCP 伺服器
  */
@@ -38,146 +70,125 @@ async function createServer() {
 
   // 註冊工具列表處理器
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    try {
-      // 從 API 獲取工具列表
-      const response = await fetch(`${API_BASE_URL}/mcp/tools`);
-      const data = await response.json();
-
-      if (!data.ok || !data.data?.tools) {
-        throw new Error("無法獲取工具列表");
-      }
-
-      // 轉換為 MCP 格式
-      const tools = data.data.tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: {
-          type: "object",
-          properties: Object.entries(tool.parameters || {}).reduce(
-            (acc, [key, value]) => {
-              const desc = typeof value === "string" ? value : String(value);
-              acc[key] = {
-                type: desc.includes("string") ? "string" : desc.includes("number") ? "number" : desc.includes("array") ? "array" : "string",
-                description: desc,
-              };
-              return acc;
+    // 提供一組穩定且嚴格定義的工具清單（避免動態 Schema 造成相容性問題）
+    return {
+      tools: [
+        {
+          name: "query_database",
+          description: "執行 SQL 查詢以獲取數據庫資訊（僅支持 SELECT）",
+          inputSchema: {
+            type: "object",
+            properties: {
+              query: {
+                type: "string",
+                description: "SQL SELECT 查詢語句",
+              },
+              params: {
+                type: "array",
+                description: "查詢參數（可選）",
+                items: { type: "string" },
+              },
             },
-            {}
-          ),
-          required: Object.entries(tool.parameters || {})
-            .filter(([_, value]) => typeof value === "string" && value.includes("required"))
-            .map(([key]) => key),
+            required: ["query"],
+            additionalProperties: false,
+          },
         },
-      }));
-
-      return { tools };
-    } catch (error) {
-      console.error("[MCP Bridge] 獲取工具列表失敗:", error);
-      // 返回預設工具列表
-      return {
-        tools: [
-          {
-            name: "query_database",
-            description: "執行 SQL 查詢以獲取數據庫資訊（僅支持 SELECT）",
-            inputSchema: {
-              type: "object",
-              properties: {
-                query: {
-                  type: "string",
-                  description: "SQL SELECT 查詢語句",
-                },
-                params: {
-                  type: "array",
-                  description: "查詢參數（可選）",
-                  items: { type: "string" },
-                },
-              },
-              required: ["query"],
-            },
+        {
+          name: "get_database_schema",
+          description: "獲取數據庫架構資訊",
+          inputSchema: {
+            type: "object",
+            properties: {},
+            additionalProperties: false,
           },
-          {
-            name: "get_clients",
-            description: "獲取客戶列表",
-            inputSchema: {
-              type: "object",
-              properties: {
-                status: {
-                  type: "string",
-                  description: "客戶狀態 (active/inactive/all)",
-                  enum: ["active", "inactive", "all"],
-                },
-                limit: {
-                  type: "number",
-                  description: "返回數量限制，默認 50",
-                },
+        },
+        {
+          name: "get_api_config",
+          description: "獲取 API 配置資訊",
+          inputSchema: {
+            type: "object",
+            properties: {},
+            additionalProperties: false,
+          },
+        },
+        {
+          name: "get_dashboard_stats",
+          description: "獲取儀表板統計數據",
+          inputSchema: {
+            type: "object",
+            properties: {},
+            additionalProperties: false,
+          },
+        },
+        {
+          name: "search_knowledge",
+          description: "搜索知識庫",
+          inputSchema: {
+            type: "object",
+            properties: {
+              keyword: {
+                type: "string",
+                description: "搜索關鍵字",
+              },
+              category: {
+                type: "string",
+                description: "分類（可選）",
               },
             },
+            required: ["keyword"],
+            additionalProperties: false,
           },
-          {
-            name: "get_tasks",
-            description: "獲取任務列表",
-            inputSchema: {
-              type: "object",
-              properties: {
-                status: {
-                  type: "string",
-                  description: "任務狀態",
-                },
-                assigned_to: {
-                  type: "string",
-                  description: "負責人 ID",
-                },
-                limit: {
-                  type: "number",
-                  description: "返回數量限制，默認 50",
-                },
+        },
+        {
+          name: "get_clients",
+          description: "獲取客戶列表",
+          inputSchema: {
+            type: "object",
+            properties: {
+              status: {
+                type: "string",
+                description: "客戶狀態 (active/inactive/all)",
+                enum: ["active", "inactive", "all"],
+              },
+              limit: {
+                type: "number",
+                description: "返回數量限制，默認 50",
               },
             },
+            additionalProperties: false,
           },
-          {
-            name: "get_dashboard_stats",
-            description: "獲取儀表板統計數據",
-            inputSchema: {
-              type: "object",
-              properties: {},
-            },
-          },
-          {
-            name: "search_knowledge",
-            description: "搜索知識庫",
-            inputSchema: {
-              type: "object",
-              properties: {
-                keyword: {
-                  type: "string",
-                  description: "搜索關鍵字",
-                },
-                category: {
-                  type: "string",
-                  description: "分類（可選）",
-                },
+        },
+        {
+          name: "get_tasks",
+          description: "獲取任務列表",
+          inputSchema: {
+            type: "object",
+            properties: {
+              status: {
+                type: "string",
+                description: "任務狀態",
               },
-              required: ["keyword"],
+              assigned_to: {
+                type: "string",
+                description: "負責人 ID",
+              },
+              limit: {
+                type: "number",
+                description: "返回數量限制，默認 50",
+              },
             },
+            additionalProperties: false,
           },
-          {
-            name: "get_database_schema",
-            description: "獲取數據庫架構資訊",
-            inputSchema: {
-              type: "object",
-              properties: {},
-            },
-          },
-        ],
-      };
-    }
+        },
+      ],
+    };
   });
 
   // 註冊資源列表處理器
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
     try {
       // 從 API 獲取資源列表
-      const response = await fetch(`${API_BASE_URL}/mcp/resources`);
+      const response = await safeFetch(`${API_BASE_URL}/mcp/resources`);
       const data = await response.json();
 
       if (data.ok && data.data?.resources) {
@@ -251,7 +262,7 @@ async function createServer() {
           throw new Error(`未知資源: ${uri}`);
       }
 
-      const response = await fetch(`${API_BASE_URL}${endpoint}`);
+      const response = await safeFetch(`${API_BASE_URL}${endpoint}`);
       const data = await response.json();
 
       if (!data.ok) {
@@ -283,9 +294,15 @@ async function createServer() {
 
   // 註冊工具調用處理器
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+    const { name, arguments: argsRaw } = request.params;
+    const args = argsRaw || {};
 
     try {
+      // 基礎輸入驗證（避免傳入非物件或多餘屬性導致 schema 衝突）
+      if (argsRaw != null && typeof argsRaw !== "object") {
+        throw new Error("參數必須為物件");
+      }
+
       let response;
       let endpoint;
       let method = "GET";
@@ -294,6 +311,12 @@ async function createServer() {
       // 根據工具名稱決定端點和參數
       switch (name) {
         case "query_database":
+          if (!args.query || typeof args.query !== "string") {
+            throw new Error("query 為必填字串");
+          }
+          if (args.params && !Array.isArray(args.params)) {
+            throw new Error("params 必須為陣列");
+          }
           endpoint = "/mcp/query";
           method = "POST";
           body = {
@@ -307,6 +330,9 @@ async function createServer() {
           break;
 
         case "get_clients":
+          if (args.status && !["active", "inactive", "all"].includes(args.status)) {
+            throw new Error("status 僅允許 active/inactive/all");
+          }
           const clientParams = new URLSearchParams();
           if (args.status) clientParams.append("status", args.status);
           if (args.limit) clientParams.append("limit", args.limit);
@@ -326,6 +352,9 @@ async function createServer() {
           break;
 
         case "search_knowledge":
+          if (!args.keyword || typeof args.keyword !== "string") {
+            throw new Error("keyword 為必填字串");
+          }
           const knowledgeParams = new URLSearchParams();
           knowledgeParams.append("keyword", args.keyword);
           if (args.category) knowledgeParams.append("category", args.category);
@@ -356,7 +385,7 @@ async function createServer() {
         fetchOptions.body = JSON.stringify(body);
       }
 
-      response = await fetch(`${API_BASE_URL}${endpoint}`, fetchOptions);
+      response = await safeFetch(`${API_BASE_URL}${endpoint}`, fetchOptions);
       const data = await response.json();
 
       if (!data.ok) {

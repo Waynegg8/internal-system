@@ -18,10 +18,10 @@
     </a-form-item>
 
     <!-- 服務層級 SOP（自動判斷，只顯示不可選擇） -->
-    <a-form-item label="📖 服務層級 SOP（自動配置）">
+    <a-form-item label="服務層級 SOP（自動配置）">
       <div v-if="autoSelectedServiceSops.length > 0" style="padding: 12px; background: #f0f9ff; border-radius: 4px; border-left: 3px solid #3b82f6;">
         <div style="font-size: 12px; color: #1e40af; margin-bottom: 8px; font-weight: 500;">
-          ✅ 系統已自動配置以下 SOP（{{ autoSelectedServiceSops.length }}個）
+          系統已自動配置以下 SOP（{{ autoSelectedServiceSops.length }}個）
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 8px;">
           <a-tag
@@ -41,7 +41,7 @@
       </div>
       <template #help>
         <span style="color: #6b7280; font-size: 12px;">
-          💡 系統自動配置：優先使用客戶專屬 SOP，否則使用服務通用 SOP
+          系統自動配置：優先使用客戶專屬 SOP，否則使用服務通用 SOP
         </span>
       </template>
     </a-form-item>
@@ -50,7 +50,7 @@
     <div class="tasks-config-section">
       <div class="tasks-header">
         <div>
-          <strong style="color: #1e40af; font-size: 15px;">📋 任務配置</strong>
+          <strong style="color: #1e40af; font-size: 15px;">任務配置</strong>
           <p style="margin: 5px 0 0 0; font-size: 13px; color: #3b82f6;">
             配置每月自動生成的任務
           </p>
@@ -67,7 +67,7 @@
       <div class="batch-assignee-section">
         <div style="display: flex; align-items: center; gap: 10px;">
           <label style="font-size: 13px; font-weight: 500; color: #1e40af; white-space: nowrap;">
-            👥 批量設置負責人：
+            批量設置負責人：
           </label>
           <a-select
             v-model:value="batchAssignee"
@@ -80,7 +80,7 @@
             套用到所有任務
           </a-button>
           <small style="color: #6b7280; font-size: 12px;">
-            💡 之後可單獨修改個別任務
+            之後可單獨修改個別任務
           </small>
         </div>
       </div>
@@ -111,25 +111,34 @@
               size="small"
               @click="removeTask(index)"
             >
-              🗑️ 刪除
+              刪除
             </a-button>
           </div>
 
           <a-form layout="vertical">
             <!-- 任務名稱 -->
             <a-form-item label="任務名稱" required>
-              <a-input
+              <a-select
                 v-model:value="task.name"
-                placeholder="請輸入任務名稱"
+                :options="taskTypeOptions"
+                :placeholder="taskTypeOptions.length ? '請選擇任務類型' : '請先確認服務類型是否正確'"
+                :disabled="taskTypeOptions.length === 0"
+                show-search
+                :filter-option="taskTypeFilter"
                 @change="emitTasks"
               />
-              <template #help v-if="task.description">
-                <span style="color: #6b7280; font-size: 12px;">{{ task.description }}</span>
+              <template #help>
+                <span v-if="task.description" style="color: #6b7280; font-size: 12px;">
+                  {{ task.description }}
+                </span>
+                <span v-else style="color: #6b7280; font-size: 12px;">
+                  只能選擇與當前服務類型匹配的任務類型
+                </span>
               </template>
             </a-form-item>
 
             <!-- 階段選擇 -->
-            <a-form-item label="🎯 所屬階段" required>
+            <a-form-item label="所屬階段" required>
               <a-input-number
                 v-model:value="task.stage_order"
                 :min="1"
@@ -140,7 +149,7 @@
               />
               <template #help>
                 <span style="color: #6b7280; font-size: 12px;">
-                  💡 輸入階段編號（從 1 開始），多個任務可以使用相同階段編號實現同步進行
+                  輸入階段編號（從 1 開始），多個任務可以使用相同階段編號實現同步進行
                 </span>
               </template>
             </a-form-item>
@@ -148,7 +157,7 @@
             <a-row :gutter="16">
               <!-- 負責人 -->
               <a-col :span="12">
-                <a-form-item label="👤 負責人員">
+                <a-form-item label="負責人員">
                   <a-select
                     v-model:value="task.assignee_user_id"
                     placeholder="未指定"
@@ -159,7 +168,7 @@
               </a-col>
               <!-- 預估工時 -->
               <a-col :span="12">
-                <a-form-item label="⏱️ 預估工時（小時）">
+                <a-form-item label="預估工時（小時）">
                   <a-input-number
                     v-model:value="task.estimated_hours"
                     :min="0"
@@ -174,7 +183,7 @@
             <a-row :gutter="16">
               <!-- 提前生成天數 -->
               <a-col :span="8">
-                <a-form-item label="📆 提前生成">
+                <a-form-item label="提前生成">
                   <a-input-number
                     v-model:value="task.advance_days"
                     :min="0"
@@ -186,35 +195,29 @@
                   </template>
                 </a-form-item>
               </a-col>
-              <!-- 期限規則 -->
-              <a-col :span="8">
-                <a-form-item label="📅 期限規則">
-                  <a-select
-                    v-model:value="task.due_rule"
-                    @change="handleDueRuleChange(index)"
-                  >
-                    <a-select-option value="end_of_month">每月最後一天</a-select-option>
-                    <a-select-option value="specific_day">每月固定日期</a-select-option>
-                    <a-select-option value="next_month_day">次月固定日期</a-select-option>
-                    <a-select-option value="days_after_start">從月初起算天數</a-select-option>
-                  </a-select>
-                </a-form-item>
-              </a-col>
-              <!-- 期限值 -->
-              <a-col :span="8">
-                <a-form-item label="📊 日期/天數">
-                  <a-input-number
-                    v-model:value="task.due_value"
-                    :min="1"
-                    :max="31"
-                    placeholder="請輸入"
-                    style="width: 100%"
-                    :disabled="task.due_rule === 'end_of_month'"
-                    @change="handleDueValueChange(index)"
-                  />
+              <!-- 新：以月初為基準 + days_due -->
+              <a-col :span="16">
+                <a-form-item label="到期計算（簡化）">
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <span style="white-space:nowrap; color:#374151;">每月</span>
+                    <a-input
+                      value="1"
+                      disabled
+                      style="width: 60px; text-align:center;"
+                    />
+                    <span style="white-space:nowrap; color:#374151;">日 +</span>
+                    <a-input-number
+                      v-model:value="task.days_due"
+                      :min="0"
+                      placeholder="例如：20"
+                      style="width: 120px"
+                      @change="emitTasks"
+                    />
+                    <span style="white-space:nowrap; color:#374151;">天</span>
+                  </div>
                   <template #help>
-                    <span style="color: #3b82f6; font-size: 11px;">
-                      {{ getDueRuleHelp(task) }}
+                    <span style="color:#6b7280; font-size:11px;">
+                      新規則：到期日 = 當月 1 日 + days_due。未填則沿用舊規則（如每月最後一天）。
                     </span>
                   </template>
                 </a-form-item>
@@ -222,7 +225,7 @@
             </a-row>
 
             <!-- 任務 SOP（自動過濾） -->
-            <a-form-item label="📖 任務 SOP（可選）">
+            <a-form-item label="任務 SOP（可選）">
               <div v-if="taskSops.length === 0" style="color: #9ca3af; font-size: 13px; padding: 8px; background: #f9fafb; border-radius: 4px;">
                 此服務暫無專屬的任務層級 SOP
               </div>
@@ -247,7 +250,7 @@
 
             <!-- 執行頻率設置 -->
             <a-divider style="margin: 16px 0 12px 0; font-size: 13px; color: #3b82f6;">
-              📅 執行頻率設置
+              執行頻率設置
             </a-divider>
 
             <a-form-item label="執行頻率">
@@ -368,7 +371,7 @@
     >
       <a-input-search
         v-model:value="taskSopSearchText"
-        placeholder="🔍 搜尋 SOP..."
+        placeholder="搜尋 SOP..."
         style="margin-bottom: 16px;"
       />
       <div class="sop-list-container">
@@ -398,7 +401,7 @@ import { PlusOutlined } from '@ant-design/icons-vue'
 import { fetchTaskTemplates } from '@/api/task-templates'
 import { fetchAllUsers } from '@/api/users'
 import { fetchAllSOPs } from '@/api/sop'
-import { fetchAllServices } from '@/api/services'
+import { fetchAllServices, fetchServiceItems } from '@/api/services'
 import { extractApiArray } from '@/utils/apiHelpers'
 import { getId, getField } from '@/utils/fieldHelper'
 
@@ -446,6 +449,7 @@ const localTasks = ref([])
 const localSops = ref([])
 const taskSopSelectedIds = ref([])
 const selectedSopIds = ref([])
+const allServiceItems = ref([])
 
 // 服務層級 SOP（根據 service_code 自動過濾，包含客戶專屬 SOP）
 const serviceSops = computed(() => {
@@ -528,6 +532,24 @@ const userOptions = computed(() => {
   }))
 })
 
+// 任務類型選項：依照當前 serviceId 過濾 ServiceItems（任務類型）
+const taskTypeOptions = computed(() => {
+  if (!props.serviceId) return []
+  const sid = String(props.serviceId)
+  const items = (allServiceItems.value || []).filter(item => {
+    return String(item.service_id) === sid && item.is_active !== false
+  })
+  return items.map(item => ({
+    label: item.item_name,
+    value: item.item_name
+  }))
+})
+
+const taskTypeFilter = (input, option) => {
+  const text = (option?.label || '').toString().toLowerCase()
+  return text.includes((input || '').toString().toLowerCase())
+}
+
 const filteredTaskSops = computed(() => {
   if (!taskSopSearchText.value) return taskSops.value
   const search = taskSopSearchText.value.toLowerCase()
@@ -537,23 +559,8 @@ const filteredTaskSops = computed(() => {
 })
 
 // 期限規則說明
-const getDueRuleHelp = (task) => {
-  const rule = task.due_rule
-  const value = task.due_value
-
-  switch (rule) {
-    case 'end_of_month':
-      return '例：1月執行→1/31，2月執行→2/28'
-    case 'specific_day':
-      return value ? `例：每月${value}日到期` : '請填寫1-31的日期'
-    case 'next_month_day':
-      return value ? `例：1月執行→2/${value}，2月執行→3/${value}` : '請填寫1-31的日期'
-    case 'days_after_start':
-      return value ? `例：月初後第${value}天` : '請填寫天數'
-    default:
-      return ''
-  }
-}
+// 保留舊說明函式以相容（UI 已改為 days_due）
+const getDueRuleHelp = () => ''
 
 // 模板變更
 const handleTemplateChange = async (templateId) => {
@@ -633,8 +640,10 @@ const addTask = () => {
     assignee_user_id: null,
     estimated_hours: null,
     advance_days: 7,
-    due_rule: 'end_of_month',
-    due_value: null,
+    // 新規：預設不填，沿用舊規則；使用者可填 days_due 啟用新規
+    days_due: null,
+    due_rule: 'end_of_month', // 相容保留
+    due_value: null,          // 相容保留
     execution_frequency: 'monthly',
     execution_months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
     notes: null,
@@ -777,17 +786,19 @@ const selectQuarterlyMonths = (index) => {
 // 加載數據
 const loadData = async () => {
   try {
-    const [templatesRes, usersRes, sopsRes, servicesRes] = await Promise.all([
+    const [templatesRes, usersRes, sopsRes, servicesRes, serviceItemsRes] = await Promise.all([
       fetchTaskTemplates(),
       fetchAllUsers(),
       fetchAllSOPs(),
-      fetchAllServices()
+      fetchAllServices(),
+      fetchServiceItems()
     ])
 
     allTemplates.value = extractApiArray(templatesRes, [])
     allUsers.value = extractApiArray(usersRes, [])
     allSops.value = extractApiArray(sopsRes, [])
     allServices.value = extractApiArray(servicesRes, [])
+    allServiceItems.value = extractApiArray(serviceItemsRes, [])
 
     // 獲取當前服務的 service_code
     const service = allServices.value.find(s => getId(s, 'service_id', 'id') == props.serviceId)

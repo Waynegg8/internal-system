@@ -17,6 +17,12 @@
         <span v-else style="color: #999">—</span>
       </template>
 
+      <template v-else-if="column.key === 'service_type'">
+        <a-tag :color="record.service_type === 'recurring' ? 'blue' : 'green'">
+          {{ record.service_type === 'recurring' ? '週期性' : '一次性' }}
+        </a-tag>
+      </template>
+
       <template v-else-if="column.key === 'actions'">
         <a-space>
           <a-button size="small" @click="handleEdit(record)">編輯</a-button>
@@ -202,6 +208,13 @@ const columns = [
     ellipsis: {
       showTitle: true
     }
+  },
+  {
+    title: '服務類型',
+    dataIndex: 'service_type',
+    key: 'service_type',
+    width: 120,
+    align: 'center'
   },
   {
     title: '服務層級 SOP',

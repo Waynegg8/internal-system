@@ -27,28 +27,15 @@ Write-Host ""
 
 # Step 2: Deploy
 Write-Host "[Step 2/5] Deploying to Cloudflare Pages..." -ForegroundColor Yellow
-$deployOutput = npx wrangler pages deploy dist --project-name=horgoscpa-internal-v2 2>&1 | Out-String
+$deployOutput = npx wrangler pages deploy dist --project-name=horgoscpa-internal-v2 --branch=production 2>&1 | Out-String
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[FAIL] Deployment failed" -ForegroundColor Red
     exit 1
 }
 
-# Extract deployment URL
-if ($deployOutput -match 'https://[a-f0-9]+\.horgoscpa-internal-v2\.pages\.dev') {
-    $deploymentUrl = $matches[0]
-} elseif ($deployOutput -match 'https://[a-z0-9-]+\.pages\.dev') {
-    $deploymentUrl = $matches[0]
-} else {
-    Write-Host "  Getting latest deployment URL..." -ForegroundColor Cyan
-    $deployments = npx wrangler pages deployment list --project-name=horgoscpa-internal-v2 --json 2>&1
-    if ($LASTEXITCODE -eq 0 -and $deployments) {
-        $deploymentsJson = $deployments | Select-Object -First 1 | ConvertFrom-Json
-        if ($deploymentsJson -and $deploymentsJson.Count -gt 0) {
-            $deploymentUrl = $deploymentsJson[0].url
-        }
-    }
-}
+# Extract deployment URL - 強制使用 production 正式網域（自訂網域）
+$deploymentUrl = "https://v2.horgoscpa.com"
 
 if ([string]::IsNullOrEmpty($deploymentUrl)) {
     Write-Host "[FAIL] Cannot get deployment URL" -ForegroundColor Red
@@ -88,11 +75,13 @@ if (-not $deploymentReady) {
 }
 Write-Host ""
 
-# Step 4: Run tests
-Write-Host "[Step 4/5] Running Playwright tests..." -ForegroundColor Yellow
-Write-Host "  Test URL: $deploymentUrl" -ForegroundColor Cyan
+# Step 4: Run tests (Browser MCP)
+Write-Host "[Step 4/5] Running Browser MCP tests..." -ForegroundColor Yellow
+Write-Host "  Test URL: https://v2.horgoscpa.com" -ForegroundColor Cyan
 
-$env:PLAYWRIGHT_BASE_URL = $deploymentUrl
+# 一律以正式域名執行瀏覽器測試
+$env:TEST_BASE_URL = "https://v2.horgoscpa.com"
+
 npm test
 
 if ($LASTEXITCODE -eq 0) {
@@ -100,7 +89,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "[OK] All tests passed" -ForegroundColor Green
 } else {
     Write-Host "[FAIL] Tests failed" -ForegroundColor Red
-    Write-Host "  See report: playwright-report/index.html" -ForegroundColor Yellow
+    Write-Host "  See report directory: test-results" -ForegroundColor Yellow
 }
 Write-Host ""
 

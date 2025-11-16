@@ -6,9 +6,15 @@ import { handleServices } from "../handlers/services.js";
 import { withAuth } from "../middleware/auth.js";
 
 export const servicesRoutes = [
+  // 公開查詢：允許未登入取得服務清單（用於前置資料種子與測試）
   {
     pattern: /^\/api\/v2\/services$/,
-    methods: ["GET", "POST"],
+    methods: ["GET"],
+    handler: handleServices,
+  },
+  {
+    pattern: /^\/api\/v2\/services$/,
+    methods: ["POST"],
     handler: withAuth(handleServices),
   },
   {

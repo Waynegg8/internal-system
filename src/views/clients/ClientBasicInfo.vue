@@ -133,7 +133,7 @@
                 </a-tag>
               </template>
             </div>
-            <a-button size="small" @click="showTagsModal = true">+ 管理標籤</a-button>
+            <a-button v-if="canManageTags" size="small" @click="showTagsModal = true">+ 管理標籤</a-button>
           </a-form-item>
         </a-col>
       </a-row>
@@ -172,16 +172,8 @@
       <!-- 股東持股資訊 -->
       <a-row>
         <a-col :span="24">
-          <a-form-item label="股東持股資訊（JSON 格式）">
-            <a-textarea
-              v-model:value="shareholdersJson"
-              :rows="4"
-              placeholder='例如：[{"name":"張三","share_percentage":50,"share_count":1000,"share_amount":1000000,"share_type":"普通股"}]'
-              @blur="handleShareholdersChange"
-            />
-            <div style="color: #6b7280; font-size: 12px; margin-top: 4px">
-              請輸入 JSON 格式的股東持股資訊，包含：股東姓名、持股比例(%)、持股數、持股金額、持股類型
-            </div>
+          <a-form-item>
+            <ShareholdersEditor v-model="formState.shareholders" />
           </a-form-item>
         </a-col>
       </a-row>
@@ -189,16 +181,8 @@
       <!-- 董監事資訊 -->
       <a-row>
         <a-col :span="24">
-          <a-form-item label="董監事資訊（JSON 格式）">
-            <a-textarea
-              v-model:value="directorsSupervisorsJson"
-              :rows="4"
-              placeholder='例如：[{"name":"李四","position":"董事","term_start":"2024-01-01","term_end":"2026-12-31","is_current":true}]'
-              @blur="handleDirectorsSupervisorsChange"
-            />
-            <div style="color: #6b7280; font-size: 12px; margin-top: 4px">
-              請輸入 JSON 格式的董監事資訊，包含：姓名、職務、任期開始日期、任期結束日期、是否為現任
-            </div>
+          <a-form-item>
+            <DirectorsSupervisorsEditor v-model="formState.directorsSupervisors" />
           </a-form-item>
         </a-col>
       </a-row>
@@ -263,6 +247,7 @@
     <TagsModal
       v-model:selectedTagIds="formState.tagIds"
       v-model:visible="showTagsModal"
+      :allow-create="isAdmin"
     />
 
     <!-- 添加協作人員 Modal -->
@@ -311,6 +296,8 @@ import { extractApiArray, extractApiData, extractApiError } from '@/utils/apiHel
 import { getId, getField } from '@/utils/fieldHelper'
 import PageAlerts from '@/components/shared/PageAlerts.vue'
 import TagsModal from '@/components/shared/TagsModal.vue'
+import ShareholdersEditor from '@/components/clients/ShareholdersEditor.vue'
+import DirectorsSupervisorsEditor from '@/components/clients/DirectorsSupervisorsEditor.vue'
 
 const route = useRoute()
 const clientStore = useClientStore()
@@ -373,6 +360,15 @@ const isAdmin = ref(false)
 
 // 檢查是否可以管理協作人員（管理員或客戶負責人）
 const canManageCollaborators = computed(() => {
+  if (isAdmin.value) return true
+  if (!currentUser.value || !currentClient.value) return false
+  const userId = getId(currentUser.value, 'user_id', 'id', 'userId')
+  const assigneeId = getId(currentClient.value, 'assignee_user_id', 'assigneeUserId', 'assignee_id')
+  return userId && assigneeId && String(userId) === String(assigneeId)
+})
+
+// 檢查是否可以管理標籤（與協作人員相同規則：管理員或客戶負責人）
+const canManageTags = computed(() => {
   if (isAdmin.value) return true
   if (!currentUser.value || !currentClient.value) return false
   const userId = getId(currentUser.value, 'user_id', 'id', 'userId')
@@ -541,15 +537,29 @@ const handleAddCollaborator = async () => {
       // 手動關閉 Modal
       showCollaboratorModal.value = false
     } else {
-      const errorMsg = response.message || extractApiError(response, '添加失敗')
+      const status = response.status || response.code
+      if (status === 403 || response.code === 'FORBIDDEN') {
+        showError('無權限管理協作人員')
+        // 權限不足時直接關閉 Modal，避免誤操作
+        showCollaboratorModal.value = false
+      } else {
+        const errorMsg = response.message || extractApiError(response, '添加失敗')
+        console.error('添加失敗:', errorMsg)
+        showError(errorMsg)
+      }
       console.error('添加失敗:', errorMsg)
-      showError(errorMsg)
       // 不關閉 Modal，讓用戶可以重試
     }
   } catch (error) {
     console.error('添加協作人員失敗:', error)
-    const errorMsg = error.message || error.response?.data?.message || '添加失敗'
-    showError(errorMsg)
+    const status = error.status || error.response?.status
+    if (status === 403) {
+      showError('無權限管理協作人員')
+      showCollaboratorModal.value = false
+    } else {
+      const errorMsg = error.message || error.response?.data?.message || '添加失敗'
+      showError(errorMsg)
+    }
     // 不關閉 Modal，讓用戶可以重試
   } finally {
     loadingCollaborators.value = false
@@ -575,49 +585,25 @@ const handleRemoveCollaborator = async (collaborationId) => {
       // 重新載入協作人員列表
       await loadCollaborators()
     } else {
-      const errorMsg = response.message || extractApiError(response, '移除失敗')
-      showError(errorMsg)
+      const status = response.status || response.code
+      if (status === 403 || response.code === 'FORBIDDEN') {
+        showError('無權限移除此協作人員')
+      } else {
+        const errorMsg = response.message || extractApiError(response, '移除失敗')
+        showError(errorMsg)
+      }
     }
   } catch (error) {
     console.error('移除協作人員失敗:', error)
-    const errorMsg = error.message || error.response?.data?.message || '移除失敗'
-    showError(errorMsg)
+    const status = error.status || error.response?.status
+    if (status === 403) {
+      showError('無權限移除此協作人員')
+    } else {
+      const errorMsg = error.message || error.response?.data?.message || '移除失敗'
+      showError(errorMsg)
+    }
   } finally {
     loadingCollaborators.value = false
-  }
-}
-
-// JSON 欄位的字符串表示（用於 textarea 編輯）
-const shareholdersJson = ref('')
-const directorsSupervisorsJson = ref('')
-
-// 處理股東持股資訊 JSON 轉換
-const handleShareholdersChange = () => {
-  try {
-    if (shareholdersJson.value && shareholdersJson.value.trim()) {
-      const parsed = JSON.parse(shareholdersJson.value)
-      formState.shareholders = parsed
-    } else {
-      formState.shareholders = null
-    }
-  } catch (error) {
-    showError('股東持股資訊 JSON 格式錯誤，請檢查輸入')
-    console.error('JSON parse error:', error)
-  }
-}
-
-// 處理董監事資訊 JSON 轉換
-const handleDirectorsSupervisorsChange = () => {
-  try {
-    if (directorsSupervisorsJson.value && directorsSupervisorsJson.value.trim()) {
-      const parsed = JSON.parse(directorsSupervisorsJson.value)
-      formState.directorsSupervisors = parsed
-    } else {
-      formState.directorsSupervisors = null
-    }
-  } catch (error) {
-    showError('董監事資訊 JSON 格式錯誤，請檢查輸入')
-    console.error('JSON parse error:', error)
   }
 }
 
@@ -649,28 +635,38 @@ const initFormState = () => {
   // 處理 JSON 欄位
   const shareholders = getField(client, 'shareholders', null, null)
   if (shareholders) {
-    formState.shareholders = shareholders
-    try {
-      shareholdersJson.value = typeof shareholders === 'string' ? shareholders : JSON.stringify(shareholders, null, 2)
-    } catch (e) {
-      shareholdersJson.value = ''
+    // 如果已經是數組，直接使用；如果是字符串，嘗試解析
+    if (Array.isArray(shareholders)) {
+      formState.shareholders = shareholders
+    } else if (typeof shareholders === 'string') {
+      try {
+        formState.shareholders = JSON.parse(shareholders)
+      } catch (e) {
+        formState.shareholders = null
+      }
+    } else {
+      formState.shareholders = null
     }
   } else {
     formState.shareholders = null
-    shareholdersJson.value = ''
   }
   
   const directorsSupervisors = getField(client, 'directorsSupervisors', 'directors_supervisors', null)
   if (directorsSupervisors) {
-    formState.directorsSupervisors = directorsSupervisors
-    try {
-      directorsSupervisorsJson.value = typeof directorsSupervisors === 'string' ? directorsSupervisors : JSON.stringify(directorsSupervisors, null, 2)
-    } catch (e) {
-      directorsSupervisorsJson.value = ''
+    // 如果已經是數組，直接使用；如果是字符串，嘗試解析
+    if (Array.isArray(directorsSupervisors)) {
+      formState.directorsSupervisors = directorsSupervisors
+    } else if (typeof directorsSupervisors === 'string') {
+      try {
+        formState.directorsSupervisors = JSON.parse(directorsSupervisors)
+      } catch (e) {
+        formState.directorsSupervisors = null
+      }
+    } else {
+      formState.directorsSupervisors = null
     }
   } else {
     formState.directorsSupervisors = null
-    directorsSupervisorsJson.value = ''
   }
 
   // 處理標籤 IDs
@@ -710,16 +706,7 @@ const handleSave = async () => {
     // 表單驗證
     await formRef.value.validate()
 
-    // 驗證統一編號
-    const taxId = formState.taxId?.trim() || ''
-    if (taxId && taxId.length !== 8) {
-      showError('統一編號必須為8位數字')
-      return
-    }
-    if (taxId && !/^\d+$/.test(taxId)) {
-      showError('統一編號只能包含數字')
-      return
-    }
+    // 統一編號為唯讀，不允許在此處修改或校驗（避免覆蓋原值）
 
     isSaving.value = true
     const clientId = route.params.id
@@ -735,7 +722,6 @@ const handleSave = async () => {
     
     const updateData = {
       company_name: (formData.companyName || '').trim() || '',
-      tax_registration_number: taxId || null,
       contact_person_1: ensureString(formData.contactPerson1),
       contact_person_2: ensureString(formData.contactPerson2),
       assignee_user_id: formData.assigneeUserId || null,

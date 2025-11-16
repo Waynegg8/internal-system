@@ -157,6 +157,14 @@ export async function main() {
 
 // 如果直接執行此檔案
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error)
+  main()
+    .then(summary => {
+      const failed = summary && typeof summary.failed === 'number' ? summary.failed : 0
+      process.exit(failed === 0 ? 0 : 1)
+    })
+    .catch(err => {
+      console.error(err)
+      process.exit(1)
+    })
 }
 

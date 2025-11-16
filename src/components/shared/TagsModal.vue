@@ -57,14 +57,14 @@
     <div>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px">
         <h4 style="margin: 0; font-size: 14px; color: #6b7280">所有標籤（點擊選擇/取消）</h4>
-        <a-button size="small" @click="toggleNewTagForm">
+        <a-button v-if="allowCreate" size="small" @click="toggleNewTagForm">
           {{ showNewTagForm ? '− 取消新增' : '+ 新增標籤' }}
         </a-button>
       </div>
 
       <!-- 新增標籤表單 -->
       <a-form
-        v-if="showNewTagForm"
+        v-if="allowCreate && showNewTagForm"
         :model="newTagForm"
         layout="vertical"
         style="
@@ -157,6 +157,10 @@ const props = defineProps({
   visible: {
     type: Boolean,
     default: false
+  },
+  allowCreate: {
+    type: Boolean,
+    default: true
   }
 })
 

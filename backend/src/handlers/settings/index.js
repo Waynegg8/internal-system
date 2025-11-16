@@ -15,8 +15,8 @@ export async function handleSettings(request, env, ctx, requestId, match, url) {
   const user = ctx?.user;
   
   try {
-    // GET /api/v2/users - 获取所有员工列表（所有登录用户都可访问）
-    if (method === "GET" && (path === '/api/v2/users' || path === '/api/v2/settings/users')) {
+    // GET /api/v2/users 或 /users - 获取所有员工列表（所有登录用户都可访问）
+    if (method === "GET" && (path === '/api/v2/users' || path === '/api/v2/settings/users' || path === '/users' || path === '/settings/users')) {
       return await handleGetUsers(request, env, ctx, requestId, url);
     }
     
@@ -35,25 +35,25 @@ export async function handleSettings(request, env, ctx, requestId, match, url) {
       return await handleUpdateSystemSettings(request, env, ctx, requestId, url);
     }
     
-    // POST /api/v2/admin/users 或 /api/v2/settings/users - 创建新用户
-    if (method === "POST" && (path === '/api/v2/admin/users' || path === '/api/v2/settings/users')) {
+    // POST /api/v2/admin/users 或 /api/v2/settings/users 或 /settings/users - 创建新用户
+    if (method === "POST" && (path === '/api/v2/admin/users' || path === '/api/v2/settings/users' || path === '/settings/users')) {
       return await handleCreateUser(request, env, ctx, requestId, url);
     }
     
-    // GET /api/v2/settings/users/:id - 获取用户详情
-    const getUserMatch = path.match(/^\/api\/v2\/settings\/users\/(\d+)$/);
+    // GET /api/v2/settings/users/:id 或 /settings/users/:id - 获取用户详情
+    const getUserMatch = path.match(/^\/api\/v2\/settings\/users\/(\d+)$/) || path.match(/^\/settings\/users\/(\d+)$/);
     if (method === "GET" && getUserMatch) {
       return await handleGetUserProfile(request, env, ctx, requestId, getUserMatch, url);
     }
     
-    // PUT /api/v2/users/:id 或 /api/v2/settings/users/:id - 更新用户信息
-    const updateUserMatch = path.match(/^\/api\/v2\/users\/(\d+)$/) || path.match(/^\/api\/v2\/settings\/users\/(\d+)$/);
+    // PUT /api/v2/users/:id 或 /api/v2/settings/users/:id 或 /settings/users/:id - 更新用户信息
+    const updateUserMatch = path.match(/^\/api\/v2\/users\/(\d+)$/) || path.match(/^\/api\/v2\/settings\/users\/(\d+)$/) || path.match(/^\/settings\/users\/(\d+)$/);
     if (method === "PUT" && updateUserMatch) {
       return await handleUpdateUser(request, env, ctx, requestId, updateUserMatch, url);
     }
     
-    // DELETE /api/v2/users/:id 或 /api/v2/settings/users/:id - 删除用户（软删除）
-    const deleteUserMatch = path.match(/^\/api\/v2\/users\/(\d+)$/) || path.match(/^\/api\/v2\/settings\/users\/(\d+)$/);
+    // DELETE /api/v2/users/:id 或 /api/v2/settings/users/:id 或 /settings/users/:id - 删除用户（软删除）
+    const deleteUserMatch = path.match(/^\/api\/v2\/users\/(\d+)$/) || path.match(/^\/api\/v2\/settings\/users\/(\d+)$/) || path.match(/^\/settings\/users\/(\d+)$/);
     if (method === "DELETE" && deleteUserMatch) {
       return await handleDeleteUser(request, env, ctx, requestId, deleteUserMatch, url);
     }

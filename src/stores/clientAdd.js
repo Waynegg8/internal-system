@@ -211,6 +211,7 @@ export const useClientAddStore = defineStore('clientAdd', {
             advance_days: task.advance_days || template.default_advance_days || 7,
             due_rule: task.due_rule || template.default_due_date_rule || 'end_of_month',
             due_value: task.due_value || template.default_due_date_value || null,
+            days_due: Number.isFinite(task.days_due) ? Number(task.days_due) : null,
             // 執行頻率從服務層級繼承，不使用模板的執行頻率
             execution_frequency: 'monthly', // 固定為 monthly，實際執行月份從服務層級繼承
             execution_months: service.execution_months || [], // 從服務層級繼承
@@ -302,7 +303,7 @@ export const useClientAddStore = defineStore('clientAdd', {
         let clientId = this.createdClientId
         if (!clientId) {
           this.updateProgress(true, 10, 'active', '正在創建客戶基本資料...')
-          const clientApi = useClientApi()
+        const clientApi = useClientApi()
           // 準備請求數據（統一編號處理由後端完成）
           const clientData = {
             company_name: this.formData.company_name,
@@ -325,11 +326,11 @@ export const useClientAddStore = defineStore('clientAdd', {
           const clientResponse = await clientApi.createClient(clientData)
           clientId = clientResponse.data?.client_id || clientResponse.data?.clientId
 
-          if (!clientId) {
-            throw new Error('客戶ID未返回')
-          }
+        if (!clientId) {
+          throw new Error('客戶ID未返回')
+        }
 
-          this.createdClientId = clientId
+        this.createdClientId = clientId
           this.updateProgress(true, 20, 'active', '客戶基本資料創建成功')
         } else {
           this.updateProgress(true, 20, 'active', '客戶基本資料已存在')
@@ -385,6 +386,7 @@ export const useClientAddStore = defineStore('clientAdd', {
                   advance_days: task.advance_days || 7,
                   due_rule: task.due_rule || 'end_of_month',
                   due_value: task.due_value,
+                  days_due: Number.isFinite(task.days_due) ? Number(task.days_due) : null,
                   stage_order: task.stage_order || 0,
                   delivery_frequency: task.delivery_frequency || 'monthly',
                   delivery_months: task.delivery_months || null,
@@ -570,6 +572,7 @@ export const useClientAddStore = defineStore('clientAdd', {
                 advance_days: task.advance_days || 7,
                 due_rule: task.due_rule || 'end_of_month',
                 due_value: task.due_value,
+                  days_due: Number.isFinite(task.days_due) ? Number(task.days_due) : null,
                 stage_order: task.stage_order || 0,
                 delivery_frequency: task.delivery_frequency || 'monthly',
                 delivery_months: task.delivery_months || null,
@@ -774,6 +777,7 @@ export const useClientAddStore = defineStore('clientAdd', {
                 advance_days: config.advance_days || config.advanceDays || 7,
                 due_rule: config.due_rule || config.dueRule || 'end_of_month',
                 due_value: config.due_value || config.dueValue,
+                days_due: Number.isFinite(config.days_due || config.daysDue) ? Number(config.days_due || config.daysDue) : null,
                 stage_order: config.stage_order || config.stageOrder || 0,
                 delivery_frequency: config.delivery_frequency || config.deliveryFrequency || 'monthly',
                 delivery_months: config.delivery_months || config.deliveryMonths,

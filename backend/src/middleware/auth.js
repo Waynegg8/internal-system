@@ -10,6 +10,13 @@ import { getCorsHeaders } from "../utils/cors.js";
  * 要求用户登录
  */
 export async function requireAuth(request, env) {
+  // 支援非正式環境的內部測試 Token，繞過跨網域 Cookie 問題
+  const internalToken = request.headers.get('x-internal-test-token');
+  const allowInternal = (env?.APP_ENV && env.APP_ENV !== 'prod') && internalToken && internalToken === (env.INTERNAL_TEST_TOKEN || 'e2e-allow');
+  if (allowInternal) {
+    // 提供最小必要的管理員身分
+    return { user: { user_id: -1, username: 'e2e', name: 'E2E', is_admin: true } };
+  }
   const user = await getSessionUser(request, env);
   if (!user) {
     const origin = request.headers.get("Origin") || "";

@@ -147,10 +147,10 @@ export async function createTestClient(page: Page, clientData: {
     if (response?.ok) {
       return response.data?.clientId || response.data?.client_id || null
     }
-    return null
+    throw new Error(`創建測試客戶 API 返回失敗: ${JSON.stringify(response)}`)
   } catch (error) {
-    console.error('創建測試客戶失敗:', error)
-    return null
+    // 將錯誤上拋，讓測試失敗，而不是僅記錄後繼續
+    throw new Error(`創建測試客戶失敗: ${String(error)}`)
   }
 }
 
@@ -170,10 +170,9 @@ export async function createTestTag(page: Page, tagData: {
     if (response?.ok) {
       return response.data?.tag_id || response.data?.id || null
     }
-    return null
+    throw new Error(`創建測試標籤 API 返回失敗: ${JSON.stringify(response)}`)
   } catch (error) {
-    console.error('創建測試標籤失敗:', error)
-    return null
+    throw new Error(`創建測試標籤失敗: ${String(error)}`)
   }
 }
 
@@ -185,7 +184,7 @@ export async function addTagToClient(page: Page, clientId: string, tagId: number
     // 先獲取客戶現有標籤
     const clientResponse = await callAPI(page, 'GET', `/clients/${clientId}`)
     if (!clientResponse?.ok) {
-      return false
+      throw new Error(`獲取客戶資料失敗: ${JSON.stringify(clientResponse)}`)
     }
 
     const currentTagIds = clientResponse.data?.tags?.map((t: any) => t.tag_id || t.id) || []
@@ -195,10 +194,12 @@ export async function addTagToClient(page: Page, clientId: string, tagId: number
       tagIds: newTagIds
     })
 
-    return response?.ok || false
+    if (!response?.ok) {
+      throw new Error(`更新客戶標籤失敗: ${JSON.stringify(response)}`)
+    }
+    return true
   } catch (error) {
-    console.error('為客戶添加標籤失敗:', error)
-    return false
+    throw new Error(`為客戶添加標籤失敗: ${String(error)}`)
   }
 }
 
@@ -224,10 +225,9 @@ export async function createTestUser(page: Page, userData: {
     if (response?.ok) {
       return response.data?.user_id || null
     }
-    return null
+    throw new Error(`創建測試用戶 API 返回失敗: ${JSON.stringify(response)}`)
   } catch (error) {
-    console.error('創建測試用戶失敗:', error)
-    return null
+    throw new Error(`創建測試用戶失敗: ${String(error)}`)
   }
 }
 
@@ -258,6 +258,8 @@ export async function setupBR1_1TestData(page: Page): Promise<{
       if (adminUser) {
         result.adminUserId = adminUser.user_id || adminUser.id
       }
+    } else {
+      throw new Error(`無法獲取用戶列表: ${JSON.stringify(usersResponse)}`)
     }
 
     // 2. 創建測試員工（如果不存在）
@@ -284,13 +286,12 @@ export async function setupBR1_1TestData(page: Page): Promise<{
       email: 'test@company.com',
       assigneeUserId: result.adminUserId
     })
-    if (companyClientId) {
-      result.testClients.push({
-        clientId: companyClientId,
-        companyName: '測試企業客戶有限公司',
-        taxId: '0012345678'
-      })
-    }
+    if (!companyClientId) throw new Error('企業客戶建立失敗（未取得 clientId）')
+    result.testClients.push({
+      clientId: companyClientId,
+      companyName: '測試企業客戶有限公司',
+      taxId: '0012345678'
+    })
 
     // 4. 創建測試客戶（個人客戶 - 10碼身分證）
     const personalClientId = await createTestClient(page, {
@@ -301,38 +302,34 @@ export async function setupBR1_1TestData(page: Page): Promise<{
       email: 'personal@test.com',
       assigneeUserId: result.adminUserId
     })
-    if (personalClientId) {
-      result.testClients.push({
-        clientId: personalClientId,
-        companyName: '測試個人客戶',
-        taxId: 'A123456789'
-      })
-    }
+    if (!personalClientId) throw new Error('個人客戶建立失敗（未取得 clientId）')
+    result.testClients.push({
+      clientId: personalClientId,
+      companyName: '測試個人客戶',
+      taxId: 'A123456789'
+    })
 
     // 5. 創建測試標籤
     const tag1Id = await createTestTag(page, {
       tagName: '測試標籤1',
       tagColor: '#3b82f6'
     })
-    if (tag1Id) {
-      result.testTags.push({ tagId: tag1Id, tagName: '測試標籤1' })
-    }
+    if (!tag1Id) throw new Error('測試標籤1 建立失敗')
+    result.testTags.push({ tagId: tag1Id, tagName: '測試標籤1' })
 
     const tag2Id = await createTestTag(page, {
       tagName: '測試標籤2',
       tagColor: '#10b981'
     })
-    if (tag2Id) {
-      result.testTags.push({ tagId: tag2Id, tagName: '測試標籤2' })
-    }
+    if (!tag2Id) throw new Error('測試標籤2 建立失敗')
+    result.testTags.push({ tagId: tag2Id, tagName: '測試標籤2' })
 
     const tag3Id = await createTestTag(page, {
       tagName: '測試標籤3',
       tagColor: '#f59e0b'
     })
-    if (tag3Id) {
-      result.testTags.push({ tagId: tag3Id, tagName: '測試標籤3' })
-    }
+    if (!tag3Id) throw new Error('測試標籤3 建立失敗')
+    result.testTags.push({ tagId: tag3Id, tagName: '測試標籤3' })
 
     // 6. 為第一個客戶添加多個標籤（測試標籤顯示邏輯）
     if (companyClientId && tag1Id && tag2Id && tag3Id) {
@@ -348,18 +345,17 @@ export async function setupBR1_1TestData(page: Page): Promise<{
       contactPerson1: '王五',
       assigneeUserId: null // 不分配負責人
     })
-    if (unassignedClientId) {
-      result.testClients.push({
-        clientId: unassignedClientId,
-        companyName: '未分配負責人測試客戶',
-        taxId: '0087654321'
-      })
-    }
+    if (!unassignedClientId) throw new Error('未分配負責人測試客戶 建立失敗')
+    result.testClients.push({
+      clientId: unassignedClientId,
+      companyName: '未分配負責人測試客戶',
+      taxId: '0087654321'
+    })
 
     return result
   } catch (error) {
-    console.error('設置測試數據失敗:', error)
-    return result
+    // 直接上拋，讓測試在 beforeAll/測試資料建立階段即失敗
+    throw new Error(`設置測試數據失敗: ${String(error)}`)
   }
 }
 

@@ -68,13 +68,26 @@ export async function handleCreateUser(request, env, ctx, requestId, url) {
   }
   
   const hashedPassword = await hashPasswordPBKDF2(password);
+  const safeEmail = (email && String(email).trim() !== '') ? email : `${username}@example.com`;
   
-  const result = await env.DATABASE.prepare(
-    `INSERT INTO Users (username, password_hash, plain_password, name, email, is_admin, gender, start_date, is_deleted) 
-     VALUES (?, ?, ?, ?, ?, ?, 'M', datetime('now'), 0)`
-  ).bind(username, hashedPassword, password, name, email || null, is_admin ? 1 : 0).run();
-  
-  return successResponse({ user_id: result.meta?.last_row_id }, "已創建", requestId);
+  // 嘗試插入（帶 plain_password 欄位）；如失敗則回退到無該欄位的結構，提升相容性
+  try {
+    const result = await env.DATABASE.prepare(
+      `INSERT INTO Users (username, password_hash, plain_password, name, email, is_admin, gender, start_date, is_deleted) 
+       VALUES (?, ?, ?, ?, ?, ?, 'M', datetime('now'), 0)`
+    ).bind(username, hashedPassword, password, name, safeEmail, is_admin ? 1 : 0).run();
+    return successResponse({ user_id: result.meta?.last_row_id }, "已創建", requestId);
+  } catch (e1) {
+    try {
+      const result2 = await env.DATABASE.prepare(
+        `INSERT INTO Users (username, password_hash, name, email, is_admin, gender, start_date, is_deleted) 
+         VALUES (?, ?, ?, ?, ?, 'M', datetime('now'), 0)`
+      ).bind(username, hashedPassword, name, safeEmail, is_admin ? 1 : 0).run();
+      return successResponse({ user_id: result2.meta?.last_row_id }, "已創建", requestId);
+    } catch (e2) {
+      return errorResponse(500, "INTERNAL_ERROR", `建立用戶失敗: ${e2?.message || e2}`, null, requestId);
+    }
+  }
 }
 
 /**

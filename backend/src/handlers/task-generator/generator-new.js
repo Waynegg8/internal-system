@@ -17,41 +17,40 @@ function parseJsonArray(value) {
 }
 
 /**
- * 計算截止日期
+ * 計算截止日期（新規則優先：月份起始日 + days_due）
+ * 回退：若 days_due 為空，沿用舊的 due_rule/due_value 行為以保持相容
  */
 function calculateDueDate(config, targetYear, targetMonth) {
+  const hasDaysDue = Number.isFinite(config.days_due) && config.days_due >= 0;
+  if (hasDaysDue) {
+    const periodStart = new Date(targetYear, targetMonth - 1, 1);
+    const dueDate = new Date(periodStart);
+    dueDate.setDate(periodStart.getDate() + Number(config.days_due));
+    return dueDate;
+  }
+
   const dueRule = config.due_rule;
   const dueValue = config.due_value;
 
-  let dueDate;
-
   switch (dueRule) {
-    case "end_of_month":
-      // 當月最後一天
-      dueDate = new Date(targetYear, targetMonth, 0);
-      break;
-
-    case "specific_day":
-      // 當月指定日
-      dueDate = new Date(targetYear, targetMonth - 1, dueValue || 1);
-      break;
-
-    case "next_month_day":
-      // 次月指定日
-      dueDate = new Date(targetYear, targetMonth, dueValue || 1);
-      break;
-
-    case "days_after_start":
-      // 從月初起算天數
-      dueDate = new Date(targetYear, targetMonth - 1, 1);
-      dueDate.setDate(dueDate.getDate() + (dueValue || 30));
-      break;
-
-    default:
-      dueDate = new Date(targetYear, targetMonth, 0);
+    case "end_of_month": {
+      return new Date(targetYear, targetMonth, 0);
+    }
+    case "specific_day": {
+      return new Date(targetYear, targetMonth - 1, dueValue || 1);
+    }
+    case "next_month_day": {
+      return new Date(targetYear, targetMonth, dueValue || 1);
+    }
+    case "days_after_start": {
+      const base = new Date(targetYear, targetMonth - 1, 1);
+      base.setDate(base.getDate() + (dueValue || 30));
+      return base;
+    }
+    default: {
+      return new Date(targetYear, targetMonth, 0);
+    }
   }
-
-  return dueDate;
 }
 
 /**
@@ -69,11 +68,15 @@ function isConfigEffectiveInMonth(config, targetYear, targetMonth) {
 /**
  * 檢查配置是否應該在指定月份生成任務
  */
-function shouldGenerateInMonth(config, month) {
+function shouldGenerateInMonth(config, month, serviceContext) {
   const frequency = config.execution_frequency || config.delivery_frequency;
+  const serviceMonths = serviceContext ? parseJsonArray(serviceContext.execution_months) : null;
   const executionMonths = parseJsonArray(config.execution_months);
 
   // 如果指定了具體月份（優先使用）
+  if (serviceMonths && Array.isArray(serviceMonths) && serviceMonths.length > 0) {
+    return serviceMonths.includes(month);
+  }
   if (executionMonths && Array.isArray(executionMonths)) {
     return executionMonths.includes(month);
   }
@@ -139,20 +142,25 @@ export async function generateTasksForMonth(env, targetYear, targetMonth, option
   let skippedCount = 0;
 
   // 獲取所有啟用的客戶服務
-  const clientServices = await env.DATABASE.prepare(
+  const respectServiceFlag = (env && env.USE_SERVICE_AUTO_FLAG === '0') ? false : true;
+  const baseSql =
     `SELECT cs.client_service_id, cs.client_id, cs.service_id, cs.status,
+            cs.service_type, cs.execution_months, cs.use_for_auto_generate,
             c.company_name, s.service_name, s.service_code
      FROM ClientServices cs
      JOIN Clients c ON cs.client_id = c.client_id
      JOIN Services s ON cs.service_id = s.service_id
-     WHERE cs.is_deleted = 0 AND c.is_deleted = 0 AND cs.status = 'active'`
-  ).all();
+     WHERE cs.is_deleted = 0 AND c.is_deleted = 0 AND cs.status = 'active'`;
+  const querySql = respectServiceFlag
+    ? `${baseSql} AND COALESCE(cs.use_for_auto_generate, 1) = 1`
+    : baseSql;
+  const clientServices = await env.DATABASE.prepare(querySql).all();
 
   for (const cs of clientServices.results || []) {
     // 獲取該客戶服務的任務配置
     const configs = await env.DATABASE.prepare(
       `SELECT config_id, task_name, task_description, assignee_user_id,
-              estimated_hours, advance_days, due_rule, due_value, stage_order,
+              estimated_hours, advance_days, due_rule, due_value, days_due, stage_order,
               delivery_frequency, delivery_months, auto_generate, notes,
               execution_frequency, execution_months, effective_month
        FROM ClientServiceTaskConfigs
@@ -207,8 +215,14 @@ export async function generateTasksForMonth(env, targetYear, targetMonth, option
       continue;
     }
 
-    // 檢查是否應該在這個月份生成（以第一階段為基準）
-    if (!shouldGenerateInMonth(primaryConfig, targetMonth)) {
+    // 服務層控管：一次性或未啟用自動生成則跳過
+    if (cs.service_type === 'one-time' || Number(cs.use_for_auto_generate ?? 0) === 0) {
+      skippedCount++;
+      continue;
+    }
+
+    // 檢查是否應該在這個月份生成（以第一階段為基準，優先服務層設定）
+    if (!shouldGenerateInMonth(primaryConfig, targetMonth, cs)) {
       skippedCount++;
       continue;
     }

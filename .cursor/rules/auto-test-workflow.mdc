@@ -25,7 +25,7 @@ npm run deploy:test
 
 ### 3. 自動執行 Playwright 測試
 ```powershell
-$env:PLAYWRIGHT_BASE_URL="<部署URL>"; npm test
+$env:PLAYWRIGHT_BASE_URL="https://v2.horgoscpa.com"; $env:ENFORCE_PROD="1"; npm test
 ```
 
 ### 4. 測試結果處理
@@ -36,11 +36,58 @@ $env:PLAYWRIGHT_BASE_URL="<部署URL>"; npm test
 - 流程結束
 
 **如果測試失敗：**
-- 自動讀取測試報告 (`playwright-report/index.html`)
+- 自動讀取測試報告（禁止啟動本地報表伺服器）
+  - 讀取 `playwright-report/report.json` 分析錯誤
+  - 如需人眼檢視，直接開啟靜態檔 `playwright-report/index.html`（不可使用 `npx playwright show-report` 以避免流程卡住）
 - 分析失敗原因
 - 創建 TODO 列表記錄問題
 - 自動修復問題
 - **立即返回步驟 1 重新部署**
+
+### 4.1 失敗判定規則（務必同時滿足）
+- 以指令退出碼為主：`npm test` 退出碼非 0 視為失敗
+- 並行檢查報表檔案與日誌關鍵字：
+  - 解析 `playwright-report/report.json`，若 `status !== 'passed'` 或存在任一測試案例失敗，視為失敗
+  - 掃描標準輸出/錯誤輸出是否包含以下關鍵字，任一命中亦視為失敗：
+    - `設置測試數據失敗`
+    - `设置测试数据失败`
+    - `Setup test data failed`
+    - `setup test data failed`
+    - `Test data setup failed`
+    - `TimeoutError`
+    - `locator.waitFor: Timeout`
+    - `navigation timeout`
+    - `等待逾時` / `超時`
+    - `路由不存在` / `NOT_FOUND`
+    - `Unauthorized` / `未授權` / `401`
+    - `Forbidden` / `無權限` / `403`
+    - `Internal Server Error` / `伺服器錯誤` / `500`
+    - `Bad Request` / `400`
+    - `Service Unavailable` / `503`
+    - `NetworkError` / `net::ERR_` / `ECONNREFUSED` / `ECONNRESET` / `ETIMEDOUT` / `ENOTFOUND`
+    - `SSR error` / `渲染錯誤`
+    - `Playwright error` / `page.goto:`
+  - 命中關鍵字時，須將其歸類為「前置數據準備失敗」並在 TODO 中單獨標記
+
+### 4.2 失敗分類與後續動作
+- 前置數據準備失敗（上述關鍵字命中）：
+  - 檢查測試前置 API 路由、權限、測試帳號/Token、測試資料依賴
+  - 先修復測試資料準備腳本或後端路由，再重跑全部測試
+- 一般測試斷言失敗：
+  - 從 `report.json` 抽取對應測試檔名、案例標題、錯誤訊息、截圖/追蹤檔路徑加入 TODO
+  - 修復後立即重跑
+- 逾時/元素不可見：
+  - 標記為「UI 元素等待逾時」，檢查選擇器穩定性、等待條件、動畫/遮罩
+  - 必要時在 UI 加入可觀測標記或顯式可見條件
+- 路由不存在/404：
+  - 標記為「後端路由缺失」，比對 `backend/src/router/**` 與對應 handler 是否正確綁定
+  - 檢查部署分支與 API base URL
+- 權限錯誤（401/403）：
+  - 標記為「權限/登入問題」，檢查測試用帳號、權限種子資料、JWT/Session 與測試前置登入流程
+- 伺服器錯誤（5xx）：
+  - 標記為「後端例外」，優先查看 Worker logs 與對應 handler 的錯誤堆疊
+- 網路錯誤（連線失敗/解析失敗）：
+  - 標記為「部署/網路問題」，驗證部署 URL、DNS、服務是否可達，必要時重新部署
 
 ### 5. 額外驗證（可選）
 - 使用 `get_worker_logs` MCP 工具檢查日誌

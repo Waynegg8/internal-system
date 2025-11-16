@@ -25,7 +25,7 @@ export async function handleGetTaskConfigs(request, env, ctx, requestId, match, 
   // 獲取任務配置列表
   const configs = await env.DATABASE.prepare(
     `SELECT config_id, task_name, task_description, assignee_user_id,
-            estimated_hours, advance_days, due_rule, due_value, stage_order,
+            estimated_hours, advance_days, due_rule, due_value, days_due, stage_order,
             execution_frequency, execution_months, auto_generate, notes
      FROM ClientServiceTaskConfigs
      WHERE client_service_id = ? AND is_deleted = 0
@@ -57,6 +57,7 @@ export async function handleGetTaskConfigs(request, env, ctx, requestId, match, 
       advance_days: config.advance_days || 7,
       due_rule: config.due_rule || 'end_of_month',
       due_value: config.due_value,
+      days_due: Number.isFinite(config.days_due) ? Number(config.days_due) : null,
       stage_order: config.stage_order || 0,
       execution_frequency: config.execution_frequency || 'monthly',
       execution_months: execution_months,
@@ -86,6 +87,7 @@ export async function handleCreateTaskConfig(request, env, ctx, requestId, match
     advance_days,
     due_rule,
     due_value,
+    days_due,
     stage_order,
     execution_frequency,
     execution_months,
@@ -120,9 +122,9 @@ export async function handleCreateTaskConfig(request, env, ctx, requestId, match
   const result = await env.DATABASE.prepare(
     `INSERT INTO ClientServiceTaskConfigs 
      (client_service_id, task_name, task_description, assignee_user_id,
-      estimated_hours, advance_days, due_rule, due_value, stage_order,
+      estimated_hours, advance_days, due_rule, due_value, days_due, stage_order,
       execution_frequency, execution_months, auto_generate, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     clientService.client_service_id,
     task_name,
@@ -132,6 +134,7 @@ export async function handleCreateTaskConfig(request, env, ctx, requestId, match
     advance_days || 7,
     due_rule || 'end_of_month',
     due_value || null,
+    Number.isFinite(days_due) && days_due >= 0 ? Number(days_due) : null,
     stage_order || 0,
     execution_frequency || 'monthly',
     execution_months ? JSON.stringify(execution_months) : null,
@@ -171,6 +174,7 @@ export async function handleUpdateTaskConfig(request, env, ctx, requestId, match
     advance_days,
     due_rule,
     due_value,
+    days_due,
     stage_order,
     execution_frequency,
     execution_months,
@@ -201,7 +205,7 @@ export async function handleUpdateTaskConfig(request, env, ctx, requestId, match
   await env.DATABASE.prepare(
     `UPDATE ClientServiceTaskConfigs
      SET task_name = ?, task_description = ?, assignee_user_id = ?,
-         estimated_hours = ?, advance_days = ?, due_rule = ?, due_value = ?,
+         estimated_hours = ?, advance_days = ?, due_rule = ?, due_value = ?, days_due = ?,
          stage_order = ?, execution_frequency = ?, execution_months = ?,
          auto_generate = ?, notes = ?, updated_at = datetime('now')
      WHERE config_id = ?`
@@ -213,6 +217,7 @@ export async function handleUpdateTaskConfig(request, env, ctx, requestId, match
     advance_days || 7,
     due_rule || 'end_of_month',
     due_value || null,
+    Number.isFinite(days_due) && days_due >= 0 ? Number(days_due) : null,
     stage_order || 0,
     execution_frequency || 'monthly',
     execution_months ? JSON.stringify(execution_months) : null,
@@ -338,9 +343,9 @@ export async function handleBatchSaveTaskConfigs(request, env, ctx, requestId, m
       const result = await env.DATABASE.prepare(
         `INSERT INTO ClientServiceTaskConfigs 
          (client_service_id, task_name, task_description, assignee_user_id,
-          estimated_hours, advance_days, due_rule, due_value, stage_order,
+          estimated_hours, advance_days, due_rule, due_value, days_due, stage_order,
           execution_frequency, execution_months, auto_generate, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         clientServiceId,
         taskName,
@@ -350,6 +355,7 @@ export async function handleBatchSaveTaskConfigs(request, env, ctx, requestId, m
         task.advance_days || 7,
         task.due_rule || 'end_of_month',
         task.due_value || null,
+        Number.isFinite(task.days_due) && task.days_due >= 0 ? Number(task.days_due) : null,
         task.stage_order || i,
         task.execution_frequency || 'monthly',
         task.execution_months ? JSON.stringify(task.execution_months) : null,

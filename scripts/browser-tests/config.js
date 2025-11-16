@@ -5,8 +5,8 @@
  */
 
 export const config = {
-  // 部署 URL（最新部署）
-  baseUrl: 'https://4be61917.horgoscpa-internal-v2.pages.dev',
+  // 部署 URL（可由環境變數覆寫 TEST_BASE_URL）
+  baseUrl: process.env.TEST_BASE_URL || 'https://v2.horgoscpa.com',
   
   // 測試帳號（從 seed-test-data.js 獲取）
   accounts: {
