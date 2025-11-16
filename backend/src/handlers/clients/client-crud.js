@@ -13,18 +13,18 @@ export async function handleClientList(request, env, ctx, requestId, url) {
   try {
     const user = ctx?.user;
     const params = url.searchParams;
-  const page = Math.max(1, parseInt(params.get("page") || "1", 10));
-  const perPage = Math.min(100, Math.max(1, parseInt(params.get("perPage") || "50", 10)));
-  const offset = (page - 1) * perPage;
-  const searchQuery = (params.get("q") || "").trim();
-  const tagId = params.get("tag_id") || "";
-  const noCache = params.get("no_cache") === "1" || request.headers.get('x-no-cache') === '1';
+    const page = Math.max(1, parseInt(params.get("page") || "1", 10));
+    const perPage = Math.min(100, Math.max(1, parseInt(params.get("perPage") || "50", 10)));
+    const offset = (page - 1) * perPage;
+    const searchQuery = (params.get("q") || "").trim();
+    const tagId = params.get("tag_id") || "";
+    const noCache = params.get("no_cache") === "1" || request.headers.get('x-no-cache') === '1';
   
   // 如果不是管理員，需要根據用戶篩選客戶
   const userId = user?.user_id;
   const isAdmin = user?.is_admin || false;
   
-  const cacheKey = generateCacheKey('clients_list', { page, perPage, q: searchQuery, tag_id: tagId, userId: isAdmin ? null : userId, v: 'v4' });
+  const cacheKey = generateCacheKey('clients_list', { page, perPage, q: searchQuery, tag_id: tagId, userId: isAdmin ? null : userId, v: 'v5' });
   
   if (!noCache) {
     const kvCached = await getKVCache(env, cacheKey);
@@ -143,11 +143,12 @@ export async function handleClientList(request, env, ctx, requestId, url) {
     svcCountRows.results?.forEach(r => { serviceCountMap[r.client_id] = Number(r.svc_count || 0); });
     
     // 批量汇总全年收费总额
+    const yearTotalPlaceholders = clientIds.map(() => '?').join(',');
     const yearTotalRows = await env.DATABASE.prepare(
       `SELECT cs.client_id, SUM(COALESCE(sbs.billing_amount, 0)) AS total_amount
        FROM ClientServices cs
        LEFT JOIN ServiceBillingSchedule sbs ON sbs.client_service_id = cs.client_service_id
-       WHERE cs.client_id IN (${placeholders}) AND cs.is_deleted = 0
+       WHERE cs.client_id IN (${yearTotalPlaceholders}) AND cs.is_deleted = 0
        GROUP BY cs.client_id`
     ).bind(...clientIds).all();
     yearTotalRows.results?.forEach(r => { yearTotalMap[r.client_id] = Number(r.total_amount || 0); });
@@ -157,7 +158,7 @@ export async function handleClientList(request, env, ctx, requestId, url) {
     clientId: r.client_id,
     companyName: r.company_name,
     taxId: r.tax_registration_number,
-    contact_person_1: "", // Clients表没有contact_person_1字段
+    contact_person_1: "",
     assigneeName: r.assignee_user_id ? (usersMap[r.assignee_user_id] || "未分配") : "未分配",
     tags: tagsMap[r.client_id] || [],
     services_count: serviceCountMap[r.client_id] || 0,
@@ -208,6 +209,10 @@ export async function handleClientDetail(request, env, ctx, requestId, match, ur
   const row = await env.DATABASE.prepare(
     `SELECT c.client_id, c.company_name, c.tax_registration_number, 
             c.phone, c.email, c.client_notes, c.payment_notes, c.created_at, c.updated_at,
+            c.contact_person_1, c.contact_person_2,
+            c.company_owner, c.company_address, c.capital_amount,
+            c.shareholders, c.directors_supervisors,
+            c.primary_contact_method, c.line_id,
             u.user_id as assignee_id, u.name as assignee_name,
             GROUP_CONCAT(t.tag_id || ':' || t.tag_name || ':' || COALESCE(t.tag_color, ''), '|') as tags
      FROM Clients c
@@ -322,13 +327,46 @@ export async function handleClientDetail(request, env, ctx, requestId, match, ur
     };
   }));
   
+  // 解析 JSON 欄位
+  let shareholders = null;
+  let directorsSupervisors = null;
+  try {
+    if (row.shareholders) {
+      shareholders = typeof row.shareholders === 'string' ? JSON.parse(row.shareholders) : row.shareholders;
+    }
+  } catch (e) {
+    console.warn('Failed to parse shareholders JSON:', e);
+  }
+  try {
+    if (row.directors_supervisors) {
+      directorsSupervisors = typeof row.directors_supervisors === 'string' ? JSON.parse(row.directors_supervisors) : row.directors_supervisors;
+    }
+  } catch (e) {
+    console.warn('Failed to parse directors_supervisors JSON:', e);
+  }
+
   const data = {
     client_id: row.client_id,  // 保留下劃線格式以確保兼容性
     clientId: row.client_id,
     companyName: row.company_name,
     taxId: row.tax_registration_number,
-    contact_person_1: "", // Clients表没有contact_person_1字段
-    contact_person_2: "", // Clients表没有contact_person_2字段
+    contact_person_1: row.contact_person_1 || "",
+    contactPerson1: row.contact_person_1 || "",
+    contact_person_2: row.contact_person_2 || "",
+    contactPerson2: row.contact_person_2 || "",
+    companyOwner: row.company_owner || "",
+    company_owner: row.company_owner || "",
+    companyAddress: row.company_address || "",
+    company_address: row.company_address || "",
+    capitalAmount: row.capital_amount !== null && row.capital_amount !== undefined ? Number(row.capital_amount) : null,
+    capital_amount: row.capital_amount !== null && row.capital_amount !== undefined ? Number(row.capital_amount) : null,
+    shareholders: shareholders,
+    directorsSupervisors: directorsSupervisors,
+    directors_supervisors: directorsSupervisors,
+    primaryContactMethod: row.primary_contact_method || "",
+    primary_contact_method: row.primary_contact_method || "",
+    lineId: row.line_id || "",
+    line_id: row.line_id || "",
     assigneeUserId: row.assignee_id,
     assigneeName: row.assignee_name || "",
     phone: row.phone || "",
@@ -363,6 +401,13 @@ export async function handleCreateClient(request, env, ctx, requestId, url) {
   const paymentNotes = body.paymentNotes || body.payment_notes || body.billing_notes;
   const contactPerson1 = body.contactPerson1 || body.contact_person_1 || body.contact_person;
   const contactPerson2 = body.contactPerson2 || body.contact_person_2;
+  const companyOwner = body.companyOwner || body.company_owner;
+  const companyAddress = body.companyAddress || body.company_address;
+  const capitalAmount = body.capitalAmount !== undefined ? body.capitalAmount : (body.capital_amount !== undefined ? body.capital_amount : null);
+  const shareholders = body.shareholders ? (typeof body.shareholders === 'string' ? body.shareholders : JSON.stringify(body.shareholders)) : null;
+  const directorsSupervisors = body.directorsSupervisors ? (typeof body.directorsSupervisors === 'string' ? body.directorsSupervisors : JSON.stringify(body.directorsSupervisors)) : (body.directors_supervisors ? (typeof body.directors_supervisors === 'string' ? body.directors_supervisors : JSON.stringify(body.directors_supervisors)) : null);
+  const primaryContactMethod = body.primaryContactMethod || body.primary_contact_method;
+  const lineId = body.lineId || body.line_id;
   
   const errors = [];
   if (!companyName) errors.push({ field: "companyName", message: "必填" });
@@ -372,30 +417,103 @@ export async function handleCreateClient(request, env, ctx, requestId, url) {
     return errorResponse(422, "VALIDATION_ERROR", "輸入有誤", errors, requestId);
   }
   
-  // 生成客户ID
-  let finalClientId = clientId;
-  if (!finalClientId) {
-    if (taxId && isValidTaxId(taxId)) {
-      finalClientId = taxId;
-    } else {
-      finalClientId = await generateNextPersonalClientId(env);
+  // 處理統一編號和客戶編號
+  // 根據 BR1.1 規範：
+  // - 企業客戶：輸入8碼統一編號，系統自動加前綴 00 存入（變成10碼）
+  // - 個人客戶：輸入10碼身分證，直接存入統一編號欄位
+  // - 統一編號欄位值直接作為客戶編號（client_id）
+  let finalTaxId = taxId || null
+  let finalClientId = clientId
+  
+  if (finalTaxId) {
+    // 如果是8碼數字，則為企業客戶，自動加前綴 00
+    if (/^\d{8}$/.test(finalTaxId)) {
+      finalTaxId = `00${finalTaxId}`
     }
+    // 統一編號直接作為客戶編號
+    finalClientId = finalTaxId
   }
   
-  await env.DATABASE.prepare(
-    `INSERT INTO Clients (client_id, company_name, tax_registration_number,
-                         phone, email, assignee_user_id, client_notes, payment_notes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
-  ).bind(
-    finalClientId,
-    companyName,
-    taxId || null,
-    phone || null,
-    email || null,
-    assigneeUserId,
-    clientNotes || null,
-    paymentNotes || null
-  ).run();
+  // 如果沒有提供客戶編號或統一編號，生成個人客戶編號
+  if (!finalClientId) {
+    finalClientId = await generateNextPersonalClientId(env)
+    // 個人客戶編號不需要統一編號
+    finalTaxId = null
+  }
+  
+  // 檢查客戶是否已存在（包括已刪除的）
+  const existingClient = await env.DATABASE.prepare(
+    `SELECT client_id, is_deleted FROM Clients WHERE client_id = ? LIMIT 1`
+  ).bind(finalClientId).first()
+  
+  if (existingClient) {
+    if (existingClient.is_deleted === 1) {
+      // 如果客戶已刪除，恢復該客戶
+      await env.DATABASE.prepare(
+        `UPDATE Clients 
+         SET company_name = ?, tax_registration_number = ?,
+             phone = ?, email = ?, assignee_user_id = ?, client_notes = ?, payment_notes = ?,
+             contact_person_1 = ?, contact_person_2 = ?,
+             company_owner = ?, company_address = ?, capital_amount = ?,
+             shareholders = ?, directors_supervisors = ?,
+             primary_contact_method = ?, line_id = ?,
+             is_deleted = 0, deleted_at = NULL, deleted_by = NULL,
+             updated_at = datetime('now')
+         WHERE client_id = ?`
+      ).bind(
+        companyName,
+        finalTaxId,
+        phone || null,
+        email || null,
+        assigneeUserId,
+        clientNotes || null,
+        paymentNotes || null,
+        contactPerson1 || null,
+        contactPerson2 || null,
+        companyOwner || null,
+        companyAddress || null,
+        capitalAmount !== null && capitalAmount !== undefined ? capitalAmount : null,
+        shareholders || null,
+        directorsSupervisors || null,
+        primaryContactMethod || null,
+        lineId || null,
+        finalClientId
+      ).run()
+    } else {
+      // 客戶已存在且未刪除，返回錯誤
+      return errorResponse(409, "CONFLICT", "客戶編號已存在", { field: "client_id", message: "該統一編號已被使用" }, requestId)
+    }
+  } else {
+    // 創建新客戶
+    await env.DATABASE.prepare(
+      `INSERT INTO Clients (client_id, company_name, tax_registration_number,
+                           phone, email, assignee_user_id, client_notes, payment_notes, 
+                           contact_person_1, contact_person_2,
+                           company_owner, company_address, capital_amount,
+                           shareholders, directors_supervisors,
+                           primary_contact_method, line_id,
+                           created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    ).bind(
+      finalClientId,
+      companyName,
+      finalTaxId,
+      phone || null,
+      email || null,
+      assigneeUserId,
+      clientNotes || null,
+      paymentNotes || null,
+      contactPerson1 || null,
+      contactPerson2 || null,
+      companyOwner || null,
+      companyAddress || null,
+      capitalAmount !== null && capitalAmount !== undefined ? capitalAmount : null,
+      shareholders || null,
+      directorsSupervisors || null,
+      primaryContactMethod || null,
+      lineId || null
+    ).run()
+  }
   
   // 清除缓存
   await Promise.all([
@@ -432,20 +550,51 @@ export async function handleUpdateClient(request, env, ctx, requestId, match, ur
     return errorResponse(403, "FORBIDDEN", "無權限修改此客戶資料", null, requestId);
   }
   
+  // 支持駝峰和下劃線兩種命名方式
+  const companyName = body.companyName || body.company_name;
+  const taxId = body.taxId || body.tax_registration_number || body.tax_id;
+  const phone = body.phone;
+  const email = body.email;
+  const assigneeUserId = body.assigneeUserId || body.assignee_user_id;
+  const clientNotes = body.clientNotes || body.client_notes || body.notes;
+  const paymentNotes = body.paymentNotes || body.payment_notes || body.billing_notes;
+  const contactPerson1 = body.contactPerson1 || body.contact_person_1 || body.contact_person;
+  const contactPerson2 = body.contactPerson2 || body.contact_person_2;
+  const companyOwner = body.companyOwner || body.company_owner;
+  const companyAddress = body.companyAddress || body.company_address;
+  const capitalAmount = body.capitalAmount !== undefined ? body.capitalAmount : (body.capital_amount !== undefined ? body.capital_amount : null);
+  const shareholders = body.shareholders ? (typeof body.shareholders === 'string' ? body.shareholders : JSON.stringify(body.shareholders)) : null;
+  const directorsSupervisors = body.directorsSupervisors ? (typeof body.directorsSupervisors === 'string' ? body.directorsSupervisors : JSON.stringify(body.directorsSupervisors)) : (body.directors_supervisors ? (typeof body.directors_supervisors === 'string' ? body.directors_supervisors : JSON.stringify(body.directors_supervisors)) : null);
+  const primaryContactMethod = body.primaryContactMethod || body.primary_contact_method;
+  const lineId = body.lineId || body.line_id;
+
   await env.DATABASE.prepare(
     `UPDATE Clients 
      SET company_name = ?, tax_registration_number = ?,
          phone = ?, email = ?, assignee_user_id = ?, client_notes = ?, payment_notes = ?,
+         contact_person_1 = ?, contact_person_2 = ?,
+         company_owner = ?, company_address = ?, capital_amount = ?,
+         shareholders = ?, directors_supervisors = ?,
+         primary_contact_method = ?, line_id = ?,
          updated_at = datetime('now')
      WHERE client_id = ? AND is_deleted = 0`
   ).bind(
-    body.company_name,
-    body.tax_registration_number || null,
-    body.phone || null,
-    body.email || null,
-    body.assignee_user_id || null,
-    body.client_notes || null,
-    body.payment_notes || null,
+    companyName,
+    taxId || null,
+    phone || null,
+    email || null,
+    assigneeUserId || null,
+    clientNotes || null,
+    paymentNotes || null,
+    contactPerson1 || null,
+    contactPerson2 || null,
+    companyOwner || null,
+    companyAddress || null,
+    capitalAmount !== null && capitalAmount !== undefined ? capitalAmount : null,
+    shareholders || null,
+    directorsSupervisors || null,
+    primaryContactMethod || null,
+    lineId || null,
     clientId
   ).run();
   

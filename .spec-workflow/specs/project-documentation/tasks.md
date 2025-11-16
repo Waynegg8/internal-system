@@ -72,4 +72,21 @@
   - _Requirements: NFR4 (可維護性要求)_
   - _Prompt: Implement the task for spec project-documentation, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Project Manager specializing in documentation processes | Task: Establish documentation maintenance process including update frequency, review procedures, and version control rules | Restrictions: Must be practical and sustainable, do not create overly complex processes, ensure team can follow | Success: Documentation maintenance process is clearly defined, update frequency is reasonable, review procedures are established, version control rules are documented_
 
+## 代碼對齊任務
+
+- [x] 8. 對齊 BR1.1: 客戶列表管理
+  - Files: 
+    - `src/components/clients/ClientListTable.vue`
+    - `src/views/clients/ClientsList.vue`
+    - `backend/src/handlers/clients/client-crud.js`
+    - `backend/migrations/0034_add_client_contact_person.sql`
+  - 合併客戶編號和統編欄位為統一編號，格式化顯示（企業客戶去掉前綴00顯示8碼，個人客戶顯示10碼），使用等寬字體
+  - 檢查並新增 contact_person_1 欄位到資料庫（如果不存在）
+  - 前端刪除按鈕只對管理員顯示
+  - 驗證所有功能是否符合規範要求
+  - Purpose: 將現有代碼與 BR1.1 需求規範對齊
+  - _Leverage: 現有的 ClientListTable.vue, ClientsList.vue, client-crud.js_
+  - _Requirements: BR1.1_
+  - _Prompt: Implement the task for spec project-documentation, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Full-stack Developer specializing in code alignment | Task: Align existing client list management code with BR1.1 requirements, including unified ID display, contact person field, and admin-only delete button | Restrictions: Must follow existing code patterns, maintain backward compatibility, verify database schema, follow design.md standards | Success: Client list displays unified ID correctly, contact_person_1 field is available, delete button is only visible to admins, all changes align with requirements.md_
+
 

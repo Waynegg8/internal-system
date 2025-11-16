@@ -201,7 +201,15 @@ export async function handleCreateClientService(request, env, ctx, requestId, ma
   const user = ctx?.user;
   
   const body = await request.json();
-  const { service_id, status, start_date, end_date } = body;
+  const { 
+    service_id, 
+    status, 
+    start_date, 
+    end_date,
+    service_type,
+    execution_months,
+    use_for_auto_generate
+  } = body;
   
   if (!service_id) {
     return errorResponse(422, "VALIDATION_ERROR", "服務ID必填", null, requestId);
@@ -242,17 +250,28 @@ export async function handleCreateClientService(request, env, ctx, requestId, ma
   
   let clientServiceId;
   
+  // 處理服務類型和執行頻率
+  const finalServiceType = service_type || 'recurring'
+  const finalExecutionMonths = execution_months 
+    ? (typeof execution_months === 'string' ? execution_months : JSON.stringify(execution_months))
+    : (finalServiceType === 'recurring' ? '[1,2,3,4,5,6,7,8,9,10,11,12]' : null)
+  const finalUseForAutoGenerate = use_for_auto_generate !== undefined ? use_for_auto_generate : (finalServiceType === 'recurring' ? 1 : 0)
+
   // 如果之前刪除過，則恢復該記錄；否則新增
   if (existing && existing.is_deleted) {
     await env.DATABASE.prepare(
       `UPDATE ClientServices 
-       SET is_deleted = 0, status = ?, start_date = ?, end_date = ?, 
+       SET is_deleted = 0, status = ?, start_date = ?, end_date = ?,
+           service_type = ?, execution_months = ?, use_for_auto_generate = ?,
            updated_at = datetime('now'), task_configs_count = 0
        WHERE client_service_id = ?`
     ).bind(
       status || 'active',
       start_date || null,
       end_date || null,
+      finalServiceType,
+      finalExecutionMonths,
+      finalUseForAutoGenerate,
       existing.client_service_id
     ).run();
     clientServiceId = existing.client_service_id;
@@ -260,16 +279,20 @@ export async function handleCreateClientService(request, env, ctx, requestId, ma
     // 新增客戶服務（確保所有必要欄位都有值）
     const result = await env.DATABASE.prepare(
       `INSERT INTO ClientServices (
-        client_id, service_id, status, start_date, end_date, 
+        client_id, service_id, status, start_date, end_date,
+        service_type, execution_months, use_for_auto_generate,
         task_configs_count, created_at, updated_at, is_deleted
       )
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 0)`
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 0)`
     ).bind(
       clientId,
       service_id,
       status || 'active',
       start_date || null,
       end_date || null,
+      finalServiceType,
+      finalExecutionMonths,
+      finalUseForAutoGenerate,
       0  // task_configs_count 初始為 0
     ).run();
     

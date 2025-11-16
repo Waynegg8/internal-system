@@ -1,0 +1,113 @@
+---
+alwaysApply: true
+---
+
+# AI 自動化測試工作流程
+
+## 核心原則
+
+當你完成任何程式碼修改後，**必須**自動執行以下流程，不得停頓：
+
+## 自動化流程
+
+### 1. 修改完成後立即部署
+```powershell
+npm run deploy:test
+```
+
+或使用 MCP 工具：
+- `deploy_pages` - 部署前端
+- `deploy_worker` - 部署後端（如需要）
+
+### 2. 部署後自動獲取 URL
+- 從部署輸出中提取部署 URL
+- 或使用 `get_deployment_status` MCP 工具獲取最新部署 URL
+
+### 3. 自動執行 Playwright 測試
+```powershell
+$env:PLAYWRIGHT_BASE_URL="<部署URL>"; npm test
+```
+
+### 4. 測試結果處理
+
+**如果測試通過：**
+- 輸出成功訊息
+- 記錄部署 URL
+- 流程結束
+
+**如果測試失敗：**
+- 自動讀取測試報告 (`playwright-report/index.html`)
+- 分析失敗原因
+- 創建 TODO 列表記錄問題
+- 自動修復問題
+- **立即返回步驟 1 重新部署**
+
+### 5. 額外驗證（可選）
+- 使用 `get_worker_logs` MCP 工具檢查日誌
+- 使用 Browser MCP 工具進行手動驗證（如需要）
+
+## 重要提醒
+
+1. **嚴禁停頓**：看到 "Deployment complete" 後必須立即執行測試
+2. **自動循環**：測試失敗後必須自動修復並重新部署
+3. **完整記錄**：所有步驟都要有清楚的輸出訊息
+4. **錯誤處理**：任何步驟失敗都要有明確的錯誤訊息和後續動作
+
+## 生產環境部署要求
+
+### 部署到生產環境
+完成測試並確認無誤後，**必須**部署到生產環境：
+
+```powershell
+# 建置前端
+npm run build
+
+# 部署到生產環境（production branch）
+npx wrangler pages deploy dist --project-name=horgoscpa-internal-v2 --branch=production
+```
+
+或使用 MCP 工具：
+- `deploy_pages` - 部署前端（確保使用 production branch）
+
+### Spec Workflow Dashboard 要求
+
+**每次啟動工作前，必須確保：**
+
+1. **Dashboard 已啟動**：
+   ```powershell
+   npm run spec:dashboard
+   ```
+   - Dashboard 運行在 http://localhost:5000
+   - 必須顯示項目已連接（不是 "No Projects Available"）
+
+2. **MCP 服務器已註冊**：
+   ```powershell
+   npm run spec:server
+   ```
+   - 在另一個終端啟動 MCP 服務器（不帶 `--dashboard` 參數）
+   - 確保 Dashboard 顯示 "已连接" 和項目名稱
+
+3. **驗證連接狀態**：
+   - 使用 Browser MCP 工具訪問 http://localhost:5000
+   - 確認顯示項目名稱（如 "system-new"）
+   - 確認連接狀態為 "已连接"（不是 "已断开连接"）
+
+**如果 Dashboard 顯示 "No Projects Available"：**
+1. 停止現有的 Dashboard 進程
+2. 重新啟動 Dashboard：`npm run spec:dashboard`
+3. 在另一個終端啟動 MCP 服務器：`npm run spec:server`
+4. 等待 5-10 秒讓服務器註冊
+5. 刷新 Dashboard 頁面驗證連接
+
+## 範例工作流程
+
+```
+1. 修改程式碼
+2. 執行: npm run deploy:test
+3. 等待部署完成
+4. 自動執行測試
+5. 如果失敗 → 分析 → 修復 → 返回步驟 2
+6. 如果成功 → 部署到生產環境
+7. 確保 Spec Workflow Dashboard 正常運行
+8. 完成
+```

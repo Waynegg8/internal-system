@@ -20,11 +20,11 @@
           </a-empty>
         </div>
       </template>
-      <!-- 客戶編號 -->
+      <!-- 統一編號（作為客戶唯一識別碼） -->
       <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'clientId'">
+        <template v-if="column.key === 'tax_registration_number'">
           <span class="table-cell-mono">
-            {{ record.clientId || record.client_id }}
+            {{ formatTaxRegistrationNumber(record.taxId || record.tax_registration_number || record.clientId || record.client_id) }}
           </span>
         </template>
         
@@ -83,9 +83,10 @@
           <span v-else style="color: #999; font-size: 12px">-</span>
         </template>
         
-        <!-- 操作 -->
+        <!-- 操作（僅管理員可見） -->
         <template v-else-if="column.key === 'action'">
           <a-popconfirm
+            v-if="isAdmin"
             title="確定要刪除此客戶嗎？"
             description="刪除後將無法復原。"
             ok-text="確定"
@@ -96,6 +97,7 @@
               刪除
             </a-button>
           </a-popconfirm>
+          <span v-else style="color: #999; font-size: 12px">-</span>
         </template>
       </template>
     </a-table>
@@ -128,6 +130,10 @@ const props = defineProps({
   selectedClientIds: {
     type: Array,
     default: () => []
+  },
+  isAdmin: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -154,10 +160,10 @@ watch(() => props.pagination.pageSize, (val) => {
 // 表格列定義 - 優化欄位寬度配置
 const columns = [
   {
-    title: '客戶編號',
-    dataIndex: 'clientId',
-    key: 'clientId',
-    width: 95,
+    title: '統一編號',
+    dataIndex: 'tax_registration_number',
+    key: 'tax_registration_number',
+    width: 110,
     ellipsis: {
       showTitle: true
     }
@@ -167,15 +173,6 @@ const columns = [
     dataIndex: 'companyName',
     key: 'companyName',
     width: 180,
-    ellipsis: {
-      showTitle: true
-    }
-  },
-  {
-    title: '統編',
-    dataIndex: 'taxId',
-    key: 'taxId',
-    width: 90,
     ellipsis: {
       showTitle: true
     }
@@ -235,6 +232,18 @@ const columns = [
     fixed: 'right'
   }
 ]
+
+// 格式化統一編號顯示（企業客戶去掉前綴00顯示8碼，個人客戶顯示10碼）
+const formatTaxRegistrationNumber = (taxId) => {
+  if (!taxId) return ''
+  const taxIdStr = String(taxId)
+  // 如果是10碼且以00開頭，則為企業客戶，去掉前綴00顯示8碼
+  if (taxIdStr.length === 10 && taxIdStr.startsWith('00')) {
+    return taxIdStr.substring(2)
+  }
+  // 否則顯示完整10碼（個人客戶或已經是8碼的企業客戶）
+  return taxIdStr
+}
 
 // 行選擇配置
 const rowSelection = computed(() => ({

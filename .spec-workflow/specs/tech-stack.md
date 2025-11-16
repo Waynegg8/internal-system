@@ -324,3 +324,4 @@
 本專案採用現代化的技術棧，前端使用 Vue 3 + Ant Design Vue，後端使用 Cloudflare Workers，資料庫使用 Cloudflare D1，並整合了 R2 儲存和 KV 快取。架構設計注重效能、可擴展性和安全性，並充分利用 Cloudflare 的邊緣計算能力，實現全球低延遲的用戶體驗。
 
 
+

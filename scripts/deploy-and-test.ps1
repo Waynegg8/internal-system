@@ -90,9 +90,22 @@ Write-Host ""
 
 # 步驟 3: 執行測試
 if (-not $SkipTests) {
-    Write-Host "[步驟 3/4] 執行測試..." -ForegroundColor Yellow
+    Write-Host "[步驟 3/4] 執行 Playwright 測試..." -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "⚠️  測試功能已移除（Playwright 已卸載）" -ForegroundColor Yellow
+    
+    # 設定測試環境變數
+    $env:PLAYWRIGHT_BASE_URL = "http://localhost:4173"
+    
+    # 執行 Playwright 測試
+    npm test
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "✗ 測試失敗" -ForegroundColor Red
+        Write-Host "查看詳細報告: playwright-report/index.html" -ForegroundColor Yellow
+        $exitCode = 1
+    } else {
+        Write-Host "✓ 所有測試通過" -ForegroundColor Green
+    }
     Write-Host ""
 } else {
     Write-Host "[步驟 3/4] 跳過測試" -ForegroundColor Gray

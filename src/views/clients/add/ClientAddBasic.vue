@@ -6,7 +6,7 @@
       layout="vertical"
       ref="formRef"
     >
-      <!-- 公司名稱和客戶編號 -->
+      <!-- 公司名稱和統一編號 -->
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item label="公司名稱（必填）" name="company_name">
@@ -17,46 +17,16 @@
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="客戶編號（必填，8位數字）" name="client_id">
-            <a-input
-              v-model:value="store.formData.client_id"
-              placeholder="8位數字"
-              :maxlength="8"
-            />
-            <div class="form-help-text" style="margin-top: 4px; color: #6b7280; font-size: 12px;">
-              <strong>公司客戶：</strong>使用統一編號<br>
-              <strong>個人客戶：</strong>點擊下方按鈕自動生成（智能避開合法統編）
-            </div>
-          </a-form-item>
-        </a-col>
-      </a-row>
-
-      <!-- 統一編號和產生個人客戶編號按鈕 -->
-      <a-row :gutter="16">
-        <a-col :span="12">
-          <a-form-item label="統一編號（選填，個人客戶可不填）" name="tax_id">
+          <a-form-item label="統一編號（必填）" name="tax_id">
             <a-input
               v-model:value="store.formData.tax_id"
-              placeholder="8位數字"
-              :maxlength="8"
+              placeholder="企業客戶：8碼數字；個人客戶：10碼身分證"
+              :maxlength="10"
+              style="font-family: monospace"
             />
             <div class="form-help-text" style="margin-top: 4px; color: #6b7280; font-size: 12px;">
-              填寫統編時會自動同步到客戶編號
-            </div>
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="&nbsp;">
-            <a-button
-              type="default"
-              block
-              @click="handleGenerateClientId"
-              :loading="store.loading"
-            >
-              🔢 產生個人客戶編號
-            </a-button>
-            <div class="form-help-text" style="margin-top: 4px; color: #6b7280; font-size: 12px;">
-              智能生成編號（自動避開合法統編，100%不衝突）
+              <strong>企業客戶：</strong>輸入8碼統一編號（系統自動加前綴00）<br>
+              <strong>個人客戶：</strong>輸入10碼身分證號
             </div>
           </a-form-item>
         </a-col>
@@ -105,7 +75,7 @@
         </a-col>
       </a-row>
 
-      <!-- Email 和標籤管理 -->
+      <!-- Email 和主要聯絡方式 -->
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item label="Email" name="email">
@@ -113,6 +83,32 @@
               v-model:value="store.formData.email"
               type="email"
               placeholder="請輸入 Email"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="主要聯絡方式">
+            <a-select
+              v-model:value="store.formData.primary_contact_method"
+              placeholder="請選擇主要聯絡方式"
+              allow-clear
+            >
+              <a-select-option value="line">LINE</a-select-option>
+              <a-select-option value="phone">電話</a-select-option>
+              <a-select-option value="email">Email</a-select-option>
+              <a-select-option value="other">其他</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <!-- LINE ID 和標籤管理 -->
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="LINE ID">
+            <a-input
+              v-model:value="store.formData.line_id"
+              placeholder="請輸入 LINE ID"
             />
           </a-form-item>
         </a-col>
@@ -135,6 +131,75 @@
                   {{ tag.tag_name }}
                 </a-tag>
               </template>
+            </div>
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <!-- 公司負責人和公司地址 -->
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="公司負責人">
+            <a-input
+              v-model:value="store.formData.company_owner"
+              placeholder="請輸入公司負責人姓名"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="公司地址">
+            <a-input
+              v-model:value="store.formData.company_address"
+              placeholder="請輸入公司地址"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <!-- 資本額 -->
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="資本額（新台幣元）">
+            <a-input-number
+              v-model:value="store.formData.capital_amount"
+              :min="0"
+              :precision="0"
+              placeholder="請輸入資本額"
+              style="width: 100%"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <!-- 股東持股資訊 -->
+      <a-row>
+        <a-col :span="24">
+          <a-form-item label="股東持股資訊（JSON 格式）">
+            <a-textarea
+              v-model:value="shareholdersJson"
+              :rows="4"
+              placeholder='例如：[{"name":"張三","share_percentage":50,"share_count":1000,"share_amount":1000000,"share_type":"普通股"}]'
+              @blur="handleShareholdersChange"
+            />
+            <div class="form-help-text" style="margin-top: 4px; color: #6b7280; font-size: 12px;">
+              請輸入 JSON 格式的股東持股資訊，包含：股東姓名、持股比例(%)、持股數、持股金額、持股類型
+            </div>
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <!-- 董監事資訊 -->
+      <a-row>
+        <a-col :span="24">
+          <a-form-item label="董監事資訊（JSON 格式）">
+            <a-textarea
+              v-model:value="directorsSupervisorsJson"
+              :rows="4"
+              placeholder='例如：[{"name":"李四","position":"董事","term_start":"2024-01-01","term_end":"2026-12-31","is_current":true}]'
+              @blur="handleDirectorsSupervisorsChange"
+            />
+            <div class="form-help-text" style="margin-top: 4px; color: #6b7280; font-size: 12px;">
+              請輸入 JSON 格式的董監事資訊，包含：姓名、職務、任期開始日期、任期結束日期、是否為現任
             </div>
           </a-form-item>
         </a-col>
@@ -167,6 +232,14 @@
       </a-row>
     </a-form>
 
+    <!-- 保存按鈕 -->
+    <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 12px">
+      <a-button @click="handleCancel">取消</a-button>
+      <a-button type="primary" :loading="store.loading" @click="handleSave">
+        保存基本資訊
+      </a-button>
+    </div>
+
     <!-- 標籤管理 Modal -->
     <ClientAddTagsModal v-model:visible="isTagsModalVisible" />
   </div>
@@ -185,6 +258,65 @@ const formRef = ref(null)
 
 // 標籤 Modal 顯示狀態
 const isTagsModalVisible = ref(false)
+
+// JSON 欄位的字符串表示（用於 textarea 編輯）
+const shareholdersJson = ref('')
+const directorsSupervisorsJson = ref('')
+
+// 處理股東持股資訊 JSON 轉換
+const handleShareholdersChange = () => {
+  try {
+    if (shareholdersJson.value && shareholdersJson.value.trim()) {
+      const parsed = JSON.parse(shareholdersJson.value)
+      store.formData.shareholders = parsed
+    } else {
+      store.formData.shareholders = null
+    }
+  } catch (error) {
+    showError('股東持股資訊 JSON 格式錯誤，請檢查輸入')
+    console.error('JSON parse error:', error)
+  }
+}
+
+// 處理董監事資訊 JSON 轉換
+const handleDirectorsSupervisorsChange = () => {
+  try {
+    if (directorsSupervisorsJson.value && directorsSupervisorsJson.value.trim()) {
+      const parsed = JSON.parse(directorsSupervisorsJson.value)
+      store.formData.directors_supervisors = parsed
+    } else {
+      store.formData.directors_supervisors = null
+    }
+  } catch (error) {
+    showError('董監事資訊 JSON 格式錯誤，請檢查輸入')
+    console.error('JSON parse error:', error)
+  }
+}
+
+// 初始化 JSON 欄位（從 store 中讀取）
+watch(() => store.formData.shareholders, (val) => {
+  if (val) {
+    try {
+      shareholdersJson.value = typeof val === 'string' ? val : JSON.stringify(val, null, 2)
+    } catch (e) {
+      shareholdersJson.value = ''
+    }
+  } else {
+    shareholdersJson.value = ''
+  }
+}, { immediate: true })
+
+watch(() => store.formData.directors_supervisors, (val) => {
+  if (val) {
+    try {
+      directorsSupervisorsJson.value = typeof val === 'string' ? val : JSON.stringify(val, null, 2)
+    } catch (e) {
+      directorsSupervisorsJson.value = ''
+    }
+  } else {
+    directorsSupervisorsJson.value = ''
+  }
+}, { immediate: true })
 
 // 用戶選項（用於下拉選單）
 const userOptions = computed(() => {
@@ -217,41 +349,38 @@ const getTagColor = (color) => {
   return colorMap[color] || color
 }
 
-// 處理產生個人客戶編號
-const handleGenerateClientId = async () => {
+
+// 處理保存基本資訊
+const handleSave = async () => {
   try {
-    await store.getNextClientId()
-    showSuccess('客戶編號已生成')
+    // 驗證表單
+    await formRef.value?.validate()
+    
+    // 保存基本資訊
+    const clientId = await store.saveBasicInfo()
+    
+    showSuccess('基本資訊保存成功！')
+    
+    // 如果客戶已創建，可以選擇跳轉到客戶詳情頁或繼續編輯其他分頁
+    // 這裡我們讓用戶繼續編輯，不自動跳轉
   } catch (error) {
-    showError(error.message || '生成客戶編號失敗')
+    if (error.errorFields) {
+      // 表單驗證錯誤
+      showError('請檢查表單輸入')
+    } else {
+      showError(error.message || '保存失敗')
+    }
   }
 }
 
-// 監聽統一編號變化，自動同步到客戶編號
-watch(
-  () => store.formData.tax_id,
-  (newTaxId) => {
-    // 如果統一編號是8位數字，且客戶編號為空，則自動同步
-    if (newTaxId && newTaxId.length === 8 && /^\d{8}$/.test(newTaxId)) {
-      if (!store.formData.client_id || store.formData.client_id === '') {
-        store.formData.client_id = newTaxId
-      }
-    }
-  }
-)
+// 處理取消
+const handleCancel = () => {
+  // 可以選擇清除表單或返回列表
+  // 這裡我們返回列表
+  window.history.back()
+}
 
-// 監聽客戶編號變化，自動同步到統編（公司客戶）
-watch(
-  () => store.formData.client_id,
-  (newClientId) => {
-    // 如果客戶編號是8位數字（公司統編格式），且統編為空，則自動同步
-    if (newClientId && newClientId.length === 8 && /^\d{8}$/.test(newClientId)) {
-      if (!store.formData.tax_id || store.formData.tax_id === '') {
-        store.formData.tax_id = newClientId
-      }
-    }
-  }
-)
+// 統一編號就是客戶編號，不需要同步邏輯
 
 // 組件掛載時載入支持數據
 onMounted(() => {

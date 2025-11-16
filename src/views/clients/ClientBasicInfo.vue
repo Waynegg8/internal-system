@@ -8,11 +8,11 @@
     />
     <a-form :model="formState" layout="vertical" :rules="formRules" ref="formRef">
       <a-row :gutter="24">
-        <!-- 客戶編號（只讀） -->
+        <!-- 統一編號（只讀，作為客戶唯一識別碼） -->
         <a-col :span="12">
-          <a-form-item label="客戶編號">
+          <a-form-item label="統一編號">
             <a-input
-              :value="formState.clientId || route.params.id"
+              :value="formatTaxRegistrationNumber(formState.taxId || formState.tax_registration_number)"
               disabled
               style="font-family: monospace"
             >
@@ -20,6 +20,9 @@
                 <span style="font-size: 12px; color: #9ca3af">🔒 不可修改</span>
               </template>
             </a-input>
+            <template #help>
+              <span style="color: #6b7280; font-size: 12px">個人客戶可不填寫統一編號</span>
+            </template>
           </a-form-item>
         </a-col>
 
@@ -29,25 +32,6 @@
             <a-input v-model:value="formState.companyName" placeholder="請輸入公司名稱" />
           </a-form-item>
         </a-col>
-      </a-row>
-
-      <a-row :gutter="24">
-        <!-- 統一編號 -->
-        <a-col :span="12">
-          <a-form-item label="統一編號" name="taxId">
-            <a-input
-              v-model:value="formState.taxId"
-              placeholder="8位數字"
-              :maxlength="8"
-              allow-clear
-            />
-            <template #help>
-              <span style="color: #6b7280; font-size: 12px">個人客戶可不填寫統一編號</span>
-            </template>
-          </a-form-item>
-        </a-col>
-
-        <a-col :span="12"></a-col>
       </a-row>
 
       <a-row :gutter="24">
@@ -103,6 +87,31 @@
           </a-form-item>
         </a-col>
 
+        <!-- 主要聯絡方式 -->
+        <a-col :span="12">
+          <a-form-item label="主要聯絡方式">
+            <a-select
+              v-model:value="formState.primaryContactMethod"
+              placeholder="請選擇主要聯絡方式"
+              allow-clear
+            >
+              <a-select-option value="line">LINE</a-select-option>
+              <a-select-option value="phone">電話</a-select-option>
+              <a-select-option value="email">Email</a-select-option>
+              <a-select-option value="other">其他</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="24">
+        <!-- LINE ID -->
+        <a-col :span="12">
+          <a-form-item label="LINE ID">
+            <a-input v-model:value="formState.lineId" placeholder="請輸入 LINE ID" allow-clear />
+          </a-form-item>
+        </a-col>
+
         <!-- 標籤管理 -->
         <a-col :span="12">
           <a-form-item label="標籤管理">
@@ -125,6 +134,71 @@
               </template>
             </div>
             <a-button size="small" @click="showTagsModal = true">+ 管理標籤</a-button>
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="24">
+        <!-- 公司負責人 -->
+        <a-col :span="12">
+          <a-form-item label="公司負責人">
+            <a-input v-model:value="formState.companyOwner" placeholder="請輸入公司負責人姓名" allow-clear />
+          </a-form-item>
+        </a-col>
+
+        <!-- 公司地址 -->
+        <a-col :span="12">
+          <a-form-item label="公司地址">
+            <a-input v-model:value="formState.companyAddress" placeholder="請輸入公司地址" allow-clear />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="24">
+        <!-- 資本額 -->
+        <a-col :span="12">
+          <a-form-item label="資本額（新台幣元）">
+            <a-input-number
+              v-model:value="formState.capitalAmount"
+              :min="0"
+              :precision="0"
+              placeholder="請輸入資本額"
+              style="width: 100%"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <!-- 股東持股資訊 -->
+      <a-row>
+        <a-col :span="24">
+          <a-form-item label="股東持股資訊（JSON 格式）">
+            <a-textarea
+              v-model:value="shareholdersJson"
+              :rows="4"
+              placeholder='例如：[{"name":"張三","share_percentage":50,"share_count":1000,"share_amount":1000000,"share_type":"普通股"}]'
+              @blur="handleShareholdersChange"
+            />
+            <div style="color: #6b7280; font-size: 12px; margin-top: 4px">
+              請輸入 JSON 格式的股東持股資訊，包含：股東姓名、持股比例(%)、持股數、持股金額、持股類型
+            </div>
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <!-- 董監事資訊 -->
+      <a-row>
+        <a-col :span="24">
+          <a-form-item label="董監事資訊（JSON 格式）">
+            <a-textarea
+              v-model:value="directorsSupervisorsJson"
+              :rows="4"
+              placeholder='例如：[{"name":"李四","position":"董事","term_start":"2024-01-01","term_end":"2026-12-31","is_current":true}]'
+              @blur="handleDirectorsSupervisorsChange"
+            />
+            <div style="color: #6b7280; font-size: 12px; margin-top: 4px">
+              請輸入 JSON 格式的董監事資訊，包含：姓名、職務、任期開始日期、任期結束日期、是否為現任
+            </div>
           </a-form-item>
         </a-col>
       </a-row>
@@ -262,7 +336,15 @@ const formState = reactive({
   email: '',
   clientNotes: '',
   paymentNotes: '',
-  tagIds: []
+  tagIds: [],
+  // 新增欄位
+  companyOwner: '',
+  companyAddress: '',
+  capitalAmount: null,
+  shareholders: null,
+  directorsSupervisors: null,
+  primaryContactMethod: '',
+  lineId: ''
 })
 
 // 表單驗證規則
@@ -314,6 +396,18 @@ const colorMap = {
 const getTagColor = (color) => {
   if (!color) return colorMap.blue
   return colorMap[color] || color
+}
+
+// 格式化統一編號顯示（企業客戶去掉前綴00顯示8碼，個人客戶顯示10碼）
+const formatTaxRegistrationNumber = (taxId) => {
+  if (!taxId) return ''
+  const taxIdStr = String(taxId)
+  // 如果是10碼且以00開頭，則為企業客戶，去掉前綴00顯示8碼
+  if (taxIdStr.length === 10 && taxIdStr.startsWith('00')) {
+    return taxIdStr.substring(2)
+  }
+  // 否則顯示完整10碼（個人客戶或已經是8碼的企業客戶）
+  return taxIdStr
 }
 
 // 已選標籤（從 formState.tagIds 計算）
@@ -493,6 +587,40 @@ const handleRemoveCollaborator = async (collaborationId) => {
   }
 }
 
+// JSON 欄位的字符串表示（用於 textarea 編輯）
+const shareholdersJson = ref('')
+const directorsSupervisorsJson = ref('')
+
+// 處理股東持股資訊 JSON 轉換
+const handleShareholdersChange = () => {
+  try {
+    if (shareholdersJson.value && shareholdersJson.value.trim()) {
+      const parsed = JSON.parse(shareholdersJson.value)
+      formState.shareholders = parsed
+    } else {
+      formState.shareholders = null
+    }
+  } catch (error) {
+    showError('股東持股資訊 JSON 格式錯誤，請檢查輸入')
+    console.error('JSON parse error:', error)
+  }
+}
+
+// 處理董監事資訊 JSON 轉換
+const handleDirectorsSupervisorsChange = () => {
+  try {
+    if (directorsSupervisorsJson.value && directorsSupervisorsJson.value.trim()) {
+      const parsed = JSON.parse(directorsSupervisorsJson.value)
+      formState.directorsSupervisors = parsed
+    } else {
+      formState.directorsSupervisors = null
+    }
+  } catch (error) {
+    showError('董監事資訊 JSON 格式錯誤，請檢查輸入')
+    console.error('JSON parse error:', error)
+  }
+}
+
 // 從 currentClient 初始化表單
 const initFormState = () => {
   if (!currentClient.value) return
@@ -510,6 +638,40 @@ const initFormState = () => {
   formState.email = getField(client, 'email', null, '')
   formState.clientNotes = getField(client, 'clientNotes', 'client_notes', '')
   formState.paymentNotes = getField(client, 'paymentNotes', 'payment_notes', '')
+  // 新增欄位
+  formState.companyOwner = getField(client, 'companyOwner', 'company_owner', '')
+  formState.companyAddress = getField(client, 'companyAddress', 'company_address', '')
+  const capitalAmount = getField(client, 'capitalAmount', 'capital_amount', null)
+  formState.capitalAmount = capitalAmount !== null && capitalAmount !== undefined ? Number(capitalAmount) : null
+  formState.primaryContactMethod = getField(client, 'primaryContactMethod', 'primary_contact_method', '')
+  formState.lineId = getField(client, 'lineId', 'line_id', '')
+  
+  // 處理 JSON 欄位
+  const shareholders = getField(client, 'shareholders', null, null)
+  if (shareholders) {
+    formState.shareholders = shareholders
+    try {
+      shareholdersJson.value = typeof shareholders === 'string' ? shareholders : JSON.stringify(shareholders, null, 2)
+    } catch (e) {
+      shareholdersJson.value = ''
+    }
+  } else {
+    formState.shareholders = null
+    shareholdersJson.value = ''
+  }
+  
+  const directorsSupervisors = getField(client, 'directorsSupervisors', 'directors_supervisors', null)
+  if (directorsSupervisors) {
+    formState.directorsSupervisors = directorsSupervisors
+    try {
+      directorsSupervisorsJson.value = typeof directorsSupervisors === 'string' ? directorsSupervisors : JSON.stringify(directorsSupervisors, null, 2)
+    } catch (e) {
+      directorsSupervisorsJson.value = ''
+    }
+  } else {
+    formState.directorsSupervisors = null
+    directorsSupervisorsJson.value = ''
+  }
 
   // 處理標籤 IDs
   if (client.tags && Array.isArray(client.tags)) {
@@ -580,7 +742,14 @@ const handleSave = async () => {
       phone: ensureString(formData.phone),
       email: ensureString(formData.email),
       client_notes: ensureString(formData.clientNotes),
-      payment_notes: ensureString(formData.paymentNotes)
+      payment_notes: ensureString(formData.paymentNotes),
+      company_owner: ensureString(formData.companyOwner),
+      company_address: ensureString(formData.companyAddress),
+      capital_amount: formData.capitalAmount !== null && formData.capitalAmount !== undefined ? Number(formData.capitalAmount) : null,
+      shareholders: formData.shareholders || null,
+      directors_supervisors: formData.directorsSupervisors || null,
+      primary_contact_method: ensureString(formData.primaryContactMethod),
+      line_id: ensureString(formData.lineId)
     }
 
     // 更新客戶基本信息

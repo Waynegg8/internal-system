@@ -36,3 +36,4 @@ Write-Host ""
 Write-Host "Note: Cursor must be restarted for MCP changes to take effect" -ForegroundColor Yellow
 
 
+

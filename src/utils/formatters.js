@@ -272,3 +272,14 @@ export function getTaskDueDateStatusText(status) {
   return statusMap[status] || status
 }
 
+// 格式化統一編號顯示（10碼格式，企業客戶去掉前綴00顯示8碼）
+export function formatTaxRegistrationNumber(taxId) {
+  if (!taxId) return ''
+  const str = String(taxId).trim()
+  // 如果是10碼且以00開頭，去掉前綴00顯示8碼
+  if (str.length === 10 && str.startsWith('00')) {
+    return str.substring(2)
+  }
+  return str
+}
+

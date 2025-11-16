@@ -40,7 +40,18 @@
       >
         批量刪除
       </a-button>
-      <a-button type="primary" @click="handleAddBilling">+ 新增收費</a-button>
+      <a-dropdown>
+        <template #overlay>
+          <a-menu @click="handleMenuClick">
+            <a-menu-item key="recurring">+ 新增定期服務收費計劃</a-menu-item>
+            <a-menu-item key="one-time">+ 新增一次性收費</a-menu-item>
+          </a-menu>
+        </template>
+        <a-button type="primary">
+          + 新增收費
+          <DownOutlined />
+        </a-button>
+      </a-dropdown>
     </div>
 
     <!-- 收費列表表格 -->
@@ -59,8 +70,8 @@
           {{ record.service_name }}
         </template>
         <template v-if="column.key === 'month_or_item'">
-          <span v-if="record.billing_type === 'monthly'">
-            {{ record.billing_month }}月
+          <span v-if="record.billing_type === 'recurring' || record.billing_type === 'monthly'">
+            <template v-if="record.billing_year">{{ record.billing_year }}年</template>{{ record.billing_month }}月
           </span>
           <span v-else>
             {{ record.description || '未命名項目' }}
@@ -92,30 +103,49 @@
       尚未設定收費
     </div>
 
-    <!-- 收費彈窗 -->
+    <!-- 保存按鈕 -->
+    <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 12px">
+      <a-button @click="handleCancel">取消</a-button>
+      <a-button type="primary" :loading="store.loading" @click="handleSave">
+        保存帳務設定
+      </a-button>
+    </div>
+
+    <!-- 收費彈窗（一次性服務） -->
     <BillingModal
       v-model:visible="isModalVisible"
       :editing-billing="editingBilling"
       @success="handleModalSuccess"
+    />
+
+    <!-- 定期服務收費計劃彈窗 -->
+    <RecurringBillingPlanModal
+      v-model:visible="isPlanModalVisible"
+      :editing-plan="editingPlan"
+      @success="handlePlanModalSuccess"
     />
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
+import { DownOutlined } from '@ant-design/icons-vue'
 import { useClientAddStore } from '@/stores/clientAdd'
 import { usePageAlert } from '@/composables/usePageAlert'
 import { formatCurrency } from '@/utils/formatters'
 import BillingModal from '@/components/clients/BillingModal.vue'
+import RecurringBillingPlanModal from '@/components/clients/RecurringBillingPlanModal.vue'
 
 const store = useClientAddStore()
-const { successMessage, showSuccess } = usePageAlert()
+const { successMessage, errorMessage, showSuccess, showError } = usePageAlert()
 
 // 本地狀態
 const selectedServiceId = ref(null)
 const selectedRowKeys = ref([])
 const isModalVisible = ref(false)
+const isPlanModalVisible = ref(false)
 const editingBilling = ref(null)
+const editingPlan = ref(null)
 
 // 過濾後的收費列表
 const filteredBillings = computed(() => {
@@ -192,7 +222,18 @@ const handleBatchDelete = () => {
   showSuccess('已刪除選中的收費記錄')
 }
 
-// 處理新增收費
+// 處理菜單點擊
+const handleMenuClick = ({ key }) => {
+  if (key === 'recurring') {
+    editingPlan.value = null
+    isPlanModalVisible.value = true
+  } else if (key === 'one-time') {
+    editingBilling.value = null
+    isModalVisible.value = true
+  }
+}
+
+// 處理新增收費（向後兼容）
 const handleAddBilling = () => {
   editingBilling.value = null
   isModalVisible.value = true
@@ -214,6 +255,37 @@ const handleDelete = (billingId) => {
 const handleModalSuccess = () => {
   // 彈窗關閉後，清空編輯狀態
   editingBilling.value = null
+}
+
+// 處理收費計劃彈窗成功
+const handlePlanModalSuccess = () => {
+  // 彈窗關閉後，清空編輯狀態
+  editingPlan.value = null
+}
+
+// 處理保存帳務設定
+const handleSave = async () => {
+  try {
+    // 檢查客戶是否已存在
+    if (!store.createdClientId) {
+      showError('請先保存基本資訊，客戶必須已存在才能保存帳務設定')
+      return
+    }
+    
+    // 保存帳務設定
+    await store.saveBillings()
+    
+    showSuccess('帳務設定保存成功！')
+    
+    // 保存成功後，可以選擇繼續編輯其他分頁或離開
+  } catch (error) {
+    showError(error.message || '保存失敗')
+  }
+}
+
+// 處理取消
+const handleCancel = () => {
+  window.history.back()
 }
 </script>
 

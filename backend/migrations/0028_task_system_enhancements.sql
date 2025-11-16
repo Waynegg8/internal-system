@@ -61,3 +61,4 @@ ALTER TABLE ClientServiceTaskConfigs ADD COLUMN effective_month TEXT;
 
 
 
+

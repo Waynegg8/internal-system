@@ -712,3 +712,4 @@
 系統採用現代化的技術棧，前端使用 Vue 3 + Ant Design Vue，後端使用 Cloudflare Workers，資料庫使用 Cloudflare D1，並整合了 R2 儲存和 KV 快取，實現了高效能、可擴展的全端應用。
 
 
+

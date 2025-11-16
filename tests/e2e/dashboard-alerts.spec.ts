@@ -8,11 +8,13 @@ test.describe('Dashboard Alerts & Summary', () => {
 
     const summaryCard = page.locator('.summary-card')
     await expect(summaryCard, 'should render daily summary card').toBeVisible()
-    await expect(summaryCard.getByText('今日摘要'), 'card title should be visible').toBeVisible()
+    // 使用更精確的選擇器，只匹配 card title
+    await expect(summaryCard.locator('.ant-card-head-title').getByText('今日摘要'), 'card title should be visible').toBeVisible()
 
     const alertsCard = page.locator('.alerts-card')
     await expect(alertsCard, 'should render realtime alerts card').toBeVisible()
-    await expect(alertsCard.getByText('即時提醒'), 'card title should be visible').toBeVisible()
+    // 使用更精確的選擇器，只匹配 card title
+    await expect(alertsCard.locator('.ant-card-head-title').getByText('即時提醒'), 'card title should be visible').toBeVisible()
 
     // verify cards render empty states gracefully when no data
     const summaryEmpty = summaryCard.locator('.ant-empty')

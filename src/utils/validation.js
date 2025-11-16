@@ -2,26 +2,28 @@
  * 表單驗證工具
  */
 
-// 客戶編號驗證（8位數字）
-export function validateClientId(clientId) {
-  return /^\d{8}$/.test(clientId)
-}
-
-// 統一編號驗證（台灣統編）
+// 統一編號驗證（支持企業8碼和個人10碼）
 export function validateTaxId(taxId) {
-  // 台灣統一編號驗證邏輯
-  if (!taxId || taxId.length !== 8) return false
+  if (!taxId || taxId.trim() === '') return false // 必填
   
-  const weights = [1, 2, 1, 2, 1, 2, 4, 1]
-  let sum = 0
+  const trimmed = taxId.trim()
   
-  for (let i = 0; i < 8; i++) {
-    const digit = parseInt(taxId[i])
-    const product = digit * weights[i]
-    sum += Math.floor(product / 10) + (product % 10)
+  // 企業客戶：8碼數字
+  if (/^\d{8}$/.test(trimmed)) {
+    return true
   }
   
-  return sum % 10 === 0
+  // 個人客戶：10碼（字母+數字組合，第一碼是字母）
+  if (/^[A-Z][A-Z0-9]{9}$/.test(trimmed)) {
+    return true
+  }
+  
+  return false
+}
+
+// 客戶編號驗證（已廢棄，統一編號就是客戶編號）
+export function validateClientId(clientId) {
+  return validateTaxId(clientId)
 }
 
 // 郵箱驗證
@@ -49,34 +51,31 @@ export const clientFormRules = {
   company_name: [
     { required: true, message: '請輸入公司名稱', trigger: 'blur' }
   ],
-  client_id: [
-    { required: true, message: '請輸入客戶編號', trigger: 'blur' },
-    { 
-      validator: (rule, value, callback) => {
-        if (!value || value.trim() === '') {
-          callback(new Error('請輸入客戶編號'))
-        } else if (!validateClientId(value)) {
-          callback(new Error('客戶編號必須為8位數字'))
-        } else {
-          callback()
-        }
-      }, 
-      trigger: 'blur' 
-    }
-  ],
   tax_id: [
+    { required: true, message: '請輸入統一編號', trigger: 'blur' },
     { 
       validator: (rule, value, callback) => {
-        // 統一編號為選填，但如果填寫了則需要驗證格式
-        if (value && value.trim() !== '') {
-          if (!validateTaxId(value)) {
-            callback(new Error('統一編號格式不正確'))
-          } else {
-            callback()
-          }
-        } else {
-          callback()
+        // 統一編號為必填，需要驗證格式
+        if (!value || value.trim() === '') {
+          callback(new Error('請輸入統一編號'))
+          return
         }
+        
+        const trimmed = value.trim()
+        
+        // 企業客戶：8碼數字
+        if (/^\d{8}$/.test(trimmed)) {
+          callback()
+          return
+        }
+        
+        // 個人客戶：10碼（字母+數字組合，第一碼是字母）
+        if (/^[A-Z][A-Z0-9]{9}$/.test(trimmed)) {
+          callback()
+          return
+        }
+        
+        callback(new Error('統一編號格式不正確：企業客戶需8碼數字，個人客戶需10碼身分證'))
       }, 
       trigger: 'blur' 
     }

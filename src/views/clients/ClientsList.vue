@@ -41,6 +41,7 @@
         :loading="store.loading"
         :pagination="store.pagination"
         :selected-client-ids="store.selectedClientIds"
+        :is-admin="isAdmin"
         @selection-change="handleSelectionChange"
         @page-change="handlePageChange"
         @view-client="handleViewClient"
@@ -73,6 +74,7 @@ import { storeToRefs } from 'pinia'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { usePageAlert } from '@/composables/usePageAlert'
 import { useClientStore } from '@/stores/clients'
+import { useAuthStore } from '@/stores/auth'
 import { fetchAllTags } from '@/api/tags'
 import { fetchAllUsers } from '@/api/users'
 import { getId, getField } from '@/utils/fieldHelper'
@@ -84,10 +86,12 @@ import QuickMigrateModal from '@/components/clients/QuickMigrateModal.vue'
 
 const router = useRouter()
 const store = useClientStore()
+const authStore = useAuthStore()
 const { successMessage, errorMessage, warningMessage, showSuccess, showError, showWarning } = usePageAlert()
 
 // 從 store 獲取響應式狀態
 const { error } = storeToRefs(store)
+const isAdmin = computed(() => authStore.isAdmin)
 
 // 本地狀態
 const searchKeyword = ref('')

@@ -67,6 +67,7 @@ export async function handleCreateBilling(request, env, ctx, requestId, url) {
   const body = await request.json();
   const clientServiceId = parseInt(body?.client_service_id || 0);
   const billingType = String(body?.billing_type || "monthly").trim();
+  const billingYear = body?.billing_year ? parseInt(body.billing_year, 10) : null;
   const billingMonth = parseInt(body?.billing_month, 10);
   const billingAmount = parseFloat(body?.billing_amount);
   const paymentDueDays = parseInt(body?.payment_due_days || 30, 10);
@@ -76,8 +77,8 @@ export async function handleCreateBilling(request, env, ctx, requestId, url) {
   
   const errors = [];
   if (!clientServiceId) errors.push({ field: "client_service_id", message: "必填" });
-  if (!['monthly', 'one-time'].includes(billingType)) {
-    errors.push({ field: "billing_type", message: "收費類型必須為monthly或one-time" });
+  if (!['monthly', 'one-time', 'recurring'].includes(billingType)) {
+    errors.push({ field: "billing_type", message: "收費類型必須為monthly、recurring或one-time" });
   }
   
   if (billingType === 'monthly') {
@@ -110,11 +111,12 @@ export async function handleCreateBilling(request, env, ctx, requestId, url) {
   }
   
   // 唯一性检查
-  if (billingType === 'monthly') {
+  if (billingType === 'monthly' || billingType === 'recurring') {
+    const finalBillingYear = billingYear || new Date().getFullYear()
     const existing = await env.DATABASE.prepare(
       `SELECT schedule_id FROM ServiceBillingSchedule 
-       WHERE client_service_id = ? AND billing_month = ? AND billing_type = 'monthly'`
-    ).bind(clientServiceId, billingMonth).first();
+       WHERE client_service_id = ? AND billing_year = ? AND billing_month = ? AND billing_type IN ('monthly', 'recurring')`
+    ).bind(clientServiceId, finalBillingYear, billingMonth).first();
     
     if (existing) {
       return errorResponse(422, "DUPLICATE", "該月份已設定收費", 
@@ -134,15 +136,19 @@ export async function handleCreateBilling(request, env, ctx, requestId, url) {
   }
   
   const now = new Date().toISOString();
+  const finalBillingYear = (billingType === 'monthly' || billingType === 'recurring') 
+    ? (billingYear || new Date().getFullYear())
+    : null
   await env.DATABASE.prepare(
     `INSERT INTO ServiceBillingSchedule 
-     (client_service_id, billing_type, billing_month, billing_amount, 
+     (client_service_id, billing_type, billing_year, billing_month, billing_amount, 
       payment_due_days, billing_date, description, notes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     clientServiceId,
-    billingType,
-    billingType === 'monthly' ? billingMonth : null,
+    billingType === 'monthly' ? 'recurring' : billingType, // 統一使用 'recurring'
+    finalBillingYear,
+    (billingType === 'monthly' || billingType === 'recurring') ? billingMonth : null,
     billingAmount,
     paymentDueDays,
     billingType === 'one-time' ? billingDate : null,
@@ -223,6 +229,7 @@ export async function handleUpdateBilling(request, env, ctx, requestId, match, u
   
   return successResponse({ schedule_id: scheduleId }, "已更新", requestId);
 }
+
 
 
 

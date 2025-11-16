@@ -79,16 +79,30 @@
           </div>
         </div>
       </a-modal>
+
+      <!-- 選擇模式 Modal -->
+      <CopyClientModeModal
+        v-model:visible="modeModalVisible"
+        @select-mode="handleSelectMode"
+      />
+
+      <!-- 客戶選擇器 Modal -->
+      <ClientSelectorModal
+        v-model:visible="clientSelectorVisible"
+        @select="handleClientSelected"
+      />
     </a-layout-content>
   </a-layout>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftOutlined } from '@ant-design/icons-vue'
 import { useClientAddStore } from '@/stores/clientAdd'
 import { usePageAlert } from '@/composables/usePageAlert'
+import CopyClientModeModal from '@/components/clients/CopyClientModeModal.vue'
+import ClientSelectorModal from '@/components/clients/ClientSelectorModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -97,6 +111,10 @@ const { successMessage, errorMessage, showSuccess, showError } = usePageAlert()
 
 // 當前活動的 Tab
 const activeTab = ref('basic')
+
+// Modal 顯示狀態
+const modeModalVisible = ref(false)
+const clientSelectorVisible = ref(false)
 
 // 進度 modal 顯示狀態（僅在非錯誤狀態時顯示）
 const progressModalVisible = computed({
@@ -139,6 +157,28 @@ const handleSubmit = async () => {
   }
 }
 
+// 處理選擇模式
+const handleSelectMode = (mode) => {
+  if (mode === 'copy') {
+    // 顯示客戶選擇器
+    clientSelectorVisible.value = true
+  } else {
+    // 新增空白客戶，直接進入表單
+    router.push('/clients/add/basic')
+  }
+}
+
+// 處理客戶選擇
+const handleClientSelected = async (clientId) => {
+  try {
+    await store.copyFromClient(clientId)
+    showSuccess('客戶資訊已複製，請修改統一編號等專屬資訊')
+    router.push('/clients/add/basic')
+  } catch (error) {
+    showError(error.message || '複製客戶資訊失敗')
+  }
+}
+
 // 監聽路由變化，同步 Tab 狀態
 watch(
   () => route.path,
@@ -153,6 +193,25 @@ watch(
   },
   { immediate: true }
 )
+
+// 組件掛載時，如果沒有客戶 ID 且表單為空，顯示模式選擇 Modal
+onMounted(() => {
+  // 檢查是否有 query 參數指定模式
+  const mode = route.query.mode
+  if (mode === 'copy') {
+    clientSelectorVisible.value = true
+  } else if (mode === 'new') {
+    router.push('/clients/add/basic')
+  } else {
+    // 如果表單為空且沒有已創建的客戶，顯示模式選擇
+    const isFormEmpty = !store.formData.company_name && 
+                       !store.formData.tax_id && 
+                       !store.createdClientId
+    if (isFormEmpty && route.path === '/clients/add') {
+      modeModalVisible.value = true
+    }
+  }
+})
 </script>
 
 <style scoped>
