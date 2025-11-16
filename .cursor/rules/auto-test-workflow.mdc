@@ -2,11 +2,11 @@
 alwaysApply: true
 ---
 
-# AI 自動化測試工作流程
+# AI 驗證工作流程（以 Browser MCP 取代 Playwright）
 
 ## 核心原則
 
-當你完成任何程式碼修改後，**必須**自動執行以下流程，不得停頓：
+當你完成任何程式碼修改後，**必須**自動執行以下流程，不得停頓（以瀏覽器工具進行人工可觀察驗證，非自動化 E2E）：
 
 ## 自動化流程
 
@@ -23,10 +23,10 @@ npm run deploy:test
 - 從部署輸出中提取部署 URL
 - 或使用 `get_deployment_status` MCP 工具獲取最新部署 URL
 
-### 3. 自動執行 Playwright 測試
-```powershell
-$env:PLAYWRIGHT_BASE_URL="https://v2.horgoscpa.com"; $env:ENFORCE_PROD="1"; npm test
-```
+### 3. 使用 Browser MCP 進行人工驗證（取代 Playwright）
+- 以瀏覽器 MCP 工具打開部署之正式或測試網域
+- 依驗證清單逐一操作並觀察 UI 回饋與網路請求
+- 針對關鍵流程（建立 → 編輯 → 驗證 → 提交 → 後端持久化 → 回顯）進行完整走查
 
 ### 4. 測試結果處理
 
@@ -36,67 +36,37 @@ $env:PLAYWRIGHT_BASE_URL="https://v2.horgoscpa.com"; $env:ENFORCE_PROD="1"; npm 
 - 流程結束
 
 **如果測試失敗：**
-- 自動讀取測試報告（禁止啟動本地報表伺服器）
-  - 讀取 `playwright-report/report.json` 分析錯誤
-  - 如需人眼檢視，直接開啟靜態檔 `playwright-report/index.html`（不可使用 `npx playwright show-report` 以避免流程卡住）
-- 分析失敗原因
+- 以瀏覽器 MCP 截圖、記錄錯誤訊息/Console/Network 關鍵資料
+- 分析失敗原因（路由、權限、後端例外、網路錯誤、UI 等）
 - 創建 TODO 列表記錄問題
 - 自動修復問題
 - **立即返回步驟 1 重新部署**
 
-### 4.1 失敗判定規則（務必同時滿足）
-- 以指令退出碼為主：`npm test` 退出碼非 0 視為失敗
-- 並行檢查報表檔案與日誌關鍵字：
-  - 解析 `playwright-report/report.json`，若 `status !== 'passed'` 或存在任一測試案例失敗，視為失敗
-  - 掃描標準輸出/錯誤輸出是否包含以下關鍵字，任一命中亦視為失敗：
-    - `設置測試數據失敗`
-    - `设置测试数据失败`
-    - `Setup test data failed`
-    - `setup test data failed`
-    - `Test data setup failed`
-    - `TimeoutError`
-    - `locator.waitFor: Timeout`
-    - `navigation timeout`
-    - `等待逾時` / `超時`
-    - `路由不存在` / `NOT_FOUND`
-    - `Unauthorized` / `未授權` / `401`
-    - `Forbidden` / `無權限` / `403`
-    - `Internal Server Error` / `伺服器錯誤` / `500`
-    - `Bad Request` / `400`
-    - `Service Unavailable` / `503`
-    - `NetworkError` / `net::ERR_` / `ECONNREFUSED` / `ECONNRESET` / `ETIMEDOUT` / `ENOTFOUND`
-    - `SSR error` / `渲染錯誤`
-    - `Playwright error` / `page.goto:`
-  - 命中關鍵字時，須將其歸類為「前置數據準備失敗」並在 TODO 中單獨標記
-
-### 4.2 失敗分類與後續動作
-- 前置數據準備失敗（上述關鍵字命中）：
+### 4.1 失敗分類與後續動作（以瀏覽器觀測為準）
+- 前置數據準備失敗（常見關鍵字/現象：NOT_FOUND、Unauthorized/403、初始化 API 失敗）
   - 檢查測試前置 API 路由、權限、測試帳號/Token、測試資料依賴
-  - 先修復測試資料準備腳本或後端路由，再重跑全部測試
-- 一般測試斷言失敗：
-  - 從 `report.json` 抽取對應測試檔名、案例標題、錯誤訊息、截圖/追蹤檔路徑加入 TODO
-  - 修復後立即重跑
-- 逾時/元素不可見：
-  - 標記為「UI 元素等待逾時」，檢查選擇器穩定性、等待條件、動畫/遮罩
-  - 必要時在 UI 加入可觀測標記或顯式可見條件
-- 路由不存在/404：
-  - 標記為「後端路由缺失」，比對 `backend/src/router/**` 與對應 handler 是否正確綁定
+  - 先修復測試資料準備腳本或後端路由，再重跑全部驗證
+- UI 元素等待逾時 / 不可見 / 選擇器不穩定
+  - 檢查選擇器穩定性、可見性條件、動畫/遮罩與 loading 狀態
+  - 在 UI 加入可觀測標記或顯式完成條件
+- 路由不存在/404
+  - 比對 `backend/src/router/**` 與對應 handler 是否正確綁定
   - 檢查部署分支與 API base URL
-- 權限錯誤（401/403）：
-  - 標記為「權限/登入問題」，檢查測試用帳號、權限種子資料、JWT/Session 與測試前置登入流程
-- 伺服器錯誤（5xx）：
-  - 標記為「後端例外」，優先查看 Worker logs 與對應 handler 的錯誤堆疊
-- 網路錯誤（連線失敗/解析失敗）：
-  - 標記為「部署/網路問題」，驗證部署 URL、DNS、服務是否可達，必要時重新部署
+- 權限錯誤（401/403）
+  - 檢查測試用帳號、權限種子資料、JWT/Session 與登入流程
+- 伺服器錯誤（5xx）
+  - 查看 Worker logs 與對應 handler 的錯誤堆疊
+- 網路錯誤（連線失敗/解析失敗）
+  - 驗證部署 URL、DNS、服務是否可達，必要時重新部署
 
 ### 5. 額外驗證（可選）
 - 使用 `get_worker_logs` MCP 工具檢查日誌
-- 使用 Browser MCP 工具進行手動驗證（如需要）
+- 使用 Browser MCP 工具進行手動驗證（建議）
 
 ## 重要提醒
 
-1. **嚴禁停頓**：看到 "Deployment complete" 後必須立即執行測試
-2. **自動循環**：測試失敗後必須自動修復並重新部署
+1. **嚴禁停頓**：看到 "Deployment complete" 後必須立即執行人工驗證
+2. **自動循環**：驗證失敗後必須自動修復並重新部署
 3. **完整記錄**：所有步驟都要有清楚的輸出訊息
 4. **錯誤處理**：任何步驟失敗都要有明確的錯誤訊息和後續動作
 
@@ -152,7 +122,7 @@ npx wrangler pages deploy dist --project-name=horgoscpa-internal-v2 --branch=pro
 1. 修改程式碼
 2. 執行: npm run deploy:test
 3. 等待部署完成
-4. 自動執行測試
+4. 以 Browser MCP 進行人工驗證
 5. 如果失敗 → 分析 → 修復 → 返回步驟 2
 6. 如果成功 → 部署到生產環境
 7. 確保 Spec Workflow Dashboard 正常運行

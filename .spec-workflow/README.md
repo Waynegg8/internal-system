@@ -1,42 +1,17 @@
-# Spec Workflow MCP
+# Spec Workflow（精簡骨架・Browser MCP 驗證）
 
-這個目錄包含 Spec Workflow MCP 的規範和配置。
+本工作流已重裝為精簡版本，規格來源沿用：
+- `specs/requirements.md`
+- `specs/design.md`
 
-## 快速啟動
+原則
+- 嚴格以 `specs/requirements.md` 與 `specs/design.md` 作為規格依據（SSOT 範圍）。
+- 驗證流程以 `.cursor/rules/auto-test-workflow.mdc` 的 Browser MCP 人工驗證為準。
+- 任務分解與進度請於本目錄的 `tasks.md` 維護。
 
-### 1. 啟動儀表板
-
-```bash
-npm run spec:dashboard
-```
-
-訪問: http://localhost:5000
-
-### 2. 啟動 MCP 伺服器（在另一個終端）
-
-```bash
-npm run spec:server
-```
-
-## 目錄結構
-
-```
-.spec-workflow/
-├── README.md              # 本檔案
-└── specs/                 # 規範文件目錄
-    └── project-refactoring.md  # 主規範
-```
-
-## 使用方式
-
-1. 儀表板會自動檢測此目錄中的規範
-2. 通過 AI 對話創建新規範
-3. 在儀表板中追蹤進度
-
-詳細使用說明請參考: `../SPEC_WORKFLOW_GUIDE.md`
-
-
-
-
+目錄
+- `specs/requirements.md`（保留、沿用）
+- `specs/design.md`（保留、沿用）
+- `tasks.md`（待辦與進度）
 
 

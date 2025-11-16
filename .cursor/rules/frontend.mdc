@@ -1,11 +1,11 @@
 ---
 alwaysApply: true
 ---
-【最高指令】本規則為常駐（alwaysApply）。每次回覆必須遵循 Spec Workflow 與 `auto-test-workflow.mdc` 的流程與要求，嚴禁忽略或停頓。
+【最高指令】本規則為常駐（alwaysApply）。每次回覆必須遵循 Spec Workflow 與更新後的 `auto-test-workflow.mdc`（Browser MCP 驗證流程），嚴禁忽略或停頓。
 
 一、工作方式（以 Spec Workflow 為準）
 - MCP 優先：deploy_pages、deploy_worker、get_deployment_status、get_worker_logs 等。
-- 修改即部署；部署完成立即測試；失敗自動建立 TODO、修復並重新部署。
+- 修改即部署；部署完成立即以 Browser MCP 驗證；失敗自動建立 TODO、修復並重新部署。
 - 具體步驟與循環細節，一律以 `/.cursor/rules/auto-test-workflow.mdc` 與 `.spec-workflow/` 文件為最終依據。
 
 二、工程準則（必要條款）
@@ -15,14 +15,14 @@ alwaysApply: true
 - UI：Ant Design；禁止 `alert/confirm`，改用 Toast/Undo。
 
 三、測試與驗證
-- 自動化：Playwright 僅對「正式環境 URL（production branch）」執行；任何錯誤或失敗必走自修復循環，直至全部通過為止。
-- 測試環境強制：部署到 Cloudflare Pages（`--branch=production`）後，使用正式網域作為 `PLAYWRIGHT_BASE_URL` 執行 E2E。
-- 零容錯：禁止忽略失敗、禁止跳過測試；失敗一律建立 TODO、修復後立即重跑。
-- 流程完整性：E2E 必須覆蓋完整業務流程（建立→編輯→驗證→提交→持久化→回顯），不得中途中止視為通過。
+- 主要驗證：以 Browser MCP 在「正式環境 URL（production branch）」進行人工可觀察驗證；任何錯誤或失敗必走自修復循環，直至全部通過為止。
+- 驗證環境：部署到 Cloudflare Pages（`--branch=production`）後，使用正式網域作為目標進行瀏覽器導覽驗證。
+- 零容錯：禁止忽略失敗、禁止跳過驗證；失敗一律建立 TODO、修復後立即重驗。
+- 流程完整性：驗證必須覆蓋完整業務流程（建立→編輯→驗證→提交→持久化→回顯），不得中途中止視為通過。
 - 表單驗證：必填欄位不可缺；未填或格式錯誤時必須有可見錯誤提示並阻止提交；禁止無聲失敗或悄然忽略欄位。
-- 可選欄位策略：自動化測試場景中，「可選欄位」亦需完整填寫並驗證持久化與回顯；另需至少 1 反例驗證錯誤提示與阻止提交。
-- 手動驗證需求時，使用 Browser MCP 模擬真實使用者操作（不得用腳本造數或 SQL 直寫）。
+- 可選欄位策略：驗證場景中，「可選欄位」亦需完整填寫並驗證持久化與回顯；另需至少 1 反例驗證錯誤提示與阻止提交。
+- 一律使用 Browser MCP 模擬真實使用者操作（不得用腳本造數或 SQL 直寫）。
 
 四、衝突與優先序
-- 如與其他規則重疊或衝突：以 `auto-test-workflow.mdc` 與 `.spec-workflow` 內容優先。
+- 如與其他規則重疊或衝突：以更新後的 `auto-test-workflow.mdc` 與 `.spec-workflow` 內容優先。
 - 本規則僅保留必要原則，避免與 Spec Workflow 重複。
