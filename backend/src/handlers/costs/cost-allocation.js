@@ -603,6 +603,274 @@ export async function handleGetEmployeeCosts(request, env, ctx, requestId, url) 
   }
 }
 
+/**
+ * 處理成本分攤計算請求
+ * @param {Object} request - 請求對象
+ * @param {Object} env - 環境變數
+ * @param {Object} ctx - 上下文
+ * @param {string} requestId - 請求ID
+ * @returns {Object} 回應對象
+ */
+export async function handleCalculateAllocation(request, env, ctx, requestId) {
+  try {
+    const body = await request.json();
+    const { year, month, allocation_method } = body;
+
+    // 參數驗證
+    if (!year || !month || !allocation_method) {
+      return errorResponse(400, "INVALID_PARAMS", "缺少必要參數：year, month, allocation_method", null, requestId);
+    }
+
+    if (!['per_employee', 'per_hour', 'per_revenue'].includes(allocation_method)) {
+      return errorResponse(400, "INVALID_PARAMS", "無效的分攤方式", null, requestId);
+    }
+
+    const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+
+    // 計算所有員工的實際時薪（包含指定分攤方式的管理費分攤）
+    const employeeActualHourlyRates = await calculateAllEmployeesActualHourlyRate(env, year, month, yearMonth);
+
+    // 獲取員工成本明細（使用現有的邏輯）
+    const usersRows = await env.DATABASE.prepare(
+      "SELECT user_id, name, base_salary FROM Users WHERE is_deleted = 0 ORDER BY name ASC"
+    ).all();
+    const users = usersRows?.results || [];
+
+    if (users.length === 0) {
+      return successResponse({
+        year,
+        month,
+        allocationMethod: allocation_method,
+        summary: {
+          totalCost: 0,
+          allocationMethod: allocation_method
+        },
+        employees: [],
+        clients: []
+      }, "查詢成功", requestId);
+    }
+
+    // 計算員工成本明細
+    const employees = [];
+    const { totalRevenue, userRevenueMap } = await calculateMonthlyRevenueDistribution(env, yearMonth);
+
+    // 取得分攤所需資料
+    const overheadDetailsRows = await env.DATABASE.prepare(
+      `SELECT m.cost_type_id, m.amount, t.allocation_method
+       FROM MonthlyOverheadCosts m
+       LEFT JOIN OverheadCostTypes t ON m.cost_type_id = t.cost_type_id
+       WHERE m.year = ? AND m.month = ? AND m.is_deleted = 0 AND t.cost_type_id IS NOT NULL AND t.is_active = 1`
+    ).bind(year, month).all();
+
+    const costTypes = overheadDetailsRows?.results || [];
+    const employeeCount = users.length;
+
+    for (const user of users) {
+      // 計算員工的勞動成本（簡化版本）
+      const baseSalaryCents = Math.round(Number(user.base_salary || 0) * 100);
+      const baseSalary = Math.round(baseSalaryCents / 100);
+
+      // 計算工時
+      const timesheetHoursResult = await env.DATABASE.prepare(
+        `SELECT SUM(hours) as total FROM Timesheets
+         WHERE user_id = ? AND substr(work_date, 1, 7) = ? AND is_deleted = 0`
+      ).bind(user.user_id, yearMonth).first();
+      const monthHours = Number(timesheetHoursResult?.total || 0);
+
+      // 計算管理費分攤（僅使用指定分攤方式）
+      let overheadAllocation = 0;
+      for (const ct of costTypes) {
+        if (ct.allocation_method !== allocation_method) continue; // 只計算指定分攤方式
+
+        const costRow = await env.DATABASE.prepare(
+          `SELECT amount FROM MonthlyOverheadCosts
+           WHERE cost_type_id = ? AND year = ? AND month = ? AND is_deleted = 0`
+        ).bind(ct.cost_type_id, year, month).first();
+        const costAmount = Number(costRow?.amount || 0);
+
+        if (allocation_method === 'per_employee') {
+          overheadAllocation += employeeCount > 0 ? Math.round(costAmount / employeeCount) : 0;
+        } else if (allocation_method === 'per_hour') {
+          const totalMonthHoursResult = await env.DATABASE.prepare(
+            `SELECT SUM(hours) as total FROM Timesheets
+             WHERE substr(work_date, 1, 7) = ? AND is_deleted = 0`
+          ).bind(yearMonth).first();
+          const totalMonthHours = Number(totalMonthHoursResult?.total || 0);
+          overheadAllocation += totalMonthHours > 0 ? Math.round(costAmount * (monthHours / totalMonthHours)) : 0;
+        } else if (allocation_method === 'per_revenue') {
+          const userRevenue = Number(userRevenueMap.get(user.user_id) || 0);
+          overheadAllocation += totalRevenue > 0 && userRevenue > 0
+            ? Math.round(costAmount * (userRevenue / totalRevenue))
+            : 0;
+        }
+      }
+
+      const laborCost = baseSalary; // 簡化處理，只使用底薪
+      const totalCost = laborCost + overheadAllocation;
+      const hourlyRate = monthHours > 0 ? Math.round(totalCost / monthHours) : 0;
+
+      employees.push({
+        userId: user.user_id,
+        name: user.name || `員工${user.user_id}`,
+        baseSalary,
+        laborCost,
+        overheadAllocation,
+        totalCost,
+        monthHours: Math.round(monthHours * 10) / 10,
+        hourlyRate
+      });
+    }
+
+    // 計算客戶成本總結（使用現有的邏輯）
+    const clientCosts = await calculateClientCostsForAllocation(env, year, month, yearMonth, allocation_method);
+
+    const totalCost = employees.reduce((sum, emp) => sum + emp.totalCost, 0);
+
+    return successResponse({
+      year,
+      month,
+      allocationMethod: allocation_method,
+      summary: {
+        totalCost,
+        allocationMethod: allocation_method,
+        employeeCount: employees.length,
+        clientCount: clientCosts.length
+      },
+      employees,
+      clients: clientCosts
+    }, "成本分攤計算成功", requestId);
+
+  } catch (err) {
+    console.error(`[Calculate Allocation] Error:`, err);
+    return errorResponse(500, "INTERNAL_ERROR", "計算失敗", null, requestId);
+  }
+}
+
+/**
+ * 計算客戶成本總結（用於成本分攤結果展示）
+ */
+async function calculateClientCostsForAllocation(env, year, month, yearMonth, allocationMethod) {
+  try {
+    // 計算所有員工的實際時薪（使用指定分攤方式）
+    const employeeActualHourlyRates = await calculateAllEmployeesActualHourlyRate(env, year, month, yearMonth);
+
+    // 獲取工時記錄
+    const timesheetsRows = await env.DATABASE.prepare(
+      `SELECT
+        t.user_id,
+        t.client_id,
+        t.work_type,
+        t.hours,
+        t.work_date,
+        c.company_name as client_name,
+        u.name as user_name
+      FROM Timesheets t
+      LEFT JOIN Clients c ON c.client_id = t.client_id
+      LEFT JOIN Users u ON u.user_id = t.user_id
+      WHERE t.is_deleted = 0 AND substr(t.work_date, 1, 7) = ?
+      ORDER BY t.client_id, t.work_date`
+    ).bind(yearMonth).all();
+
+    const timesheets = timesheetsRows?.results || [];
+
+    // 按客戶分組計算成本
+    const clientCostMap = new Map();
+
+    for (const ts of timesheets) {
+      const clientId = ts.client_id;
+      if (!clientId) continue;
+
+      const userId = String(ts.user_id);
+      const workTypeId = parseInt(ts.work_type || 1);
+      const hours = Number(ts.hours || 0);
+
+      // 計算加權工時（簡化處理）
+      const weightedHours = hours; // 簡化：不考慮工時類型倍率
+
+      // 獲取員工實際時薪
+      const actualHourlyRate = employeeActualHourlyRates[userId] || 0;
+
+      // 計算成本
+      const cost = Math.round(weightedHours * actualHourlyRate);
+
+      // 初始化客戶成本記錄
+      if (!clientCostMap.has(clientId)) {
+        clientCostMap.set(clientId, {
+          clientId: clientId,
+          clientName: ts.client_name || "",
+          totalHours: 0,
+          totalCost: 0,
+          employeeCount: new Set()
+        });
+      }
+
+      const clientCost = clientCostMap.get(clientId);
+      clientCost.totalHours += hours;
+      clientCost.totalCost += cost;
+      clientCost.employeeCount.add(userId);
+    }
+
+    // 獲取客戶收入（簡化處理）
+    const monthlyRevenues = await getMonthlyRevenueForAllocation(env, yearMonth);
+    const clientRevenueMap = new Map();
+    for (const [clientId, revenue] of Object.entries(monthlyRevenues)) {
+      clientRevenueMap.set(parseInt(clientId), Number(revenue || 0));
+    }
+
+    // 轉換為數組並添加收入和利潤信息
+    const clientCosts = Array.from(clientCostMap.values()).map(client => {
+      const revenue = clientRevenueMap.get(client.clientId) || 0;
+      const profit = revenue - client.totalCost;
+      const margin = revenue > 0 ? Math.round((profit / revenue) * 10000) / 100 : 0;
+      const avgHourlyRate = client.totalHours > 0
+        ? Math.round((client.totalCost / client.totalHours) * 100) / 100
+        : 0;
+
+      return {
+        clientId: client.clientId,
+        clientName: client.clientName,
+        totalHours: Math.round(client.totalHours * 10) / 10,
+        avgHourlyRate: avgHourlyRate,
+        totalCost: client.totalCost,
+        revenue: revenue,
+        profit: profit,
+        margin: margin,
+        employeeCount: client.employeeCount.size
+      };
+    }).sort((a, b) => b.totalCost - a.totalCost);
+
+    return clientCosts;
+
+  } catch (err) {
+    console.error(`[Client Costs for Allocation] Error:`, err);
+    return [];
+  }
+}
+
+/**
+ * 獲取月度收入分配（簡化版本）
+ */
+async function getMonthlyRevenueForAllocation(env, yearMonth) {
+  const revenueRows = await env.DATABASE.prepare(
+    `SELECT client_id, total_amount
+     FROM Receipts
+     WHERE is_deleted = 0
+       AND status != 'cancelled'
+       AND service_month = ?`
+  ).bind(yearMonth).all();
+
+  const clientRevenueMap = {};
+  for (const row of revenueRows?.results || []) {
+    const clientId = row.client_id;
+    const amount = Number(row.total_amount || 0);
+    if (clientId && amount > 0) {
+      clientRevenueMap[clientId] = (clientRevenueMap[clientId] || 0) + amount;
+    }
+  }
+
+  return clientRevenueMap;
+}
+
 function safelyParseJson(text) {
   if (!text) return {};
   try {

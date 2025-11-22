@@ -18,7 +18,12 @@
       <a-row :gutter="24">
         <a-col :span="12">
           <a-form-item label="問題" name="question">
-            <a-input v-model:value="form.question" placeholder="請輸入常見問題" />
+            <a-input 
+              v-model:value="form.question" 
+              placeholder="請輸入常見問題" 
+              :maxlength="200"
+              show-count
+            />
           </a-form-item>
         </a-col>
         <a-col :span="12">
@@ -26,10 +31,10 @@
             <a-select v-model:value="form.category" placeholder="請選擇服務類型">
               <a-select-option
                 v-for="service in services"
-                :key="service.id"
-                :value="service.id"
+                :key="getServiceId(service)"
+                :value="getServiceId(service)"
               >
-                {{ service.name }}
+                {{ getServiceName(service) }}
               </a-select-option>
             </a-select>
           </a-form-item>
@@ -50,10 +55,10 @@
             <a-select v-model:value="form.client" placeholder="請選擇客戶（可選）">
               <a-select-option
                 v-for="client in clients"
-                :key="client.id"
-                :value="client.id"
+                :key="getClientId(client)"
+                :value="getClientId(client)"
               >
-                {{ client.name }}
+                {{ getClientName(client) }}
               </a-select-option>
             </a-select>
           </a-form-item>
@@ -104,16 +109,17 @@ const saving = ref(false)
 
 const form = reactive({
   question: '',
-  category: '',
-  scope: '',
-  client: '',
+  category: undefined,
+  scope: undefined,
+  client: undefined,
   tags: [],
   answer: ''
 })
 
 const rules = {
   question: [
-    { required: true, message: '請輸入常見問題', trigger: 'blur' }
+    { required: true, message: '請輸入常見問題', trigger: 'blur' },
+    { max: 200, message: '問題長度不能超過 200 個字符', trigger: 'blur' }
   ],
   category: [
     { required: true, message: '請選擇服務類型', trigger: 'change' }
@@ -122,7 +128,16 @@ const rules = {
     { required: true, message: '請選擇層級', trigger: 'change' }
   ],
   answer: [
-    { required: true, message: '請輸入問題答案', trigger: 'blur' }
+    { required: true, message: '請輸入問題答案', trigger: 'blur' },
+    {
+      validator: (rule, value) => {
+        if (!value || value.trim() === '' || value === '<p><br></p>') {
+          return Promise.reject('請輸入問題答案')
+        }
+        return Promise.resolve()
+      },
+      trigger: 'blur'
+    }
   ]
 }
 
@@ -135,17 +150,60 @@ const handleSave = async () => {
     await formRef.value.validate()
     saving.value = true
     
-    // 這裡應該調用API保存FAQ
-    // await knowledgeStore.createFAQ(form)
+    // 準備提交數據
+    const submitData = {
+      question: form.question.trim(),
+      category: form.category,
+      scope: form.scope,
+      answer: form.answer
+    }
+    
+    // 可選字段
+    if (form.client) {
+      submitData.client_id = form.client
+    }
+    
+    if (form.tags && form.tags.length > 0) {
+      submitData.tags = form.tags
+    }
+    
+    // 調用API保存FAQ
+    await knowledgeStore.createFAQ(submitData)
     
     message.success('FAQ 創建成功')
     router.push('/knowledge/faq')
   } catch (error) {
     console.error('保存失敗:', error)
-    message.error('保存失敗，請重試')
+    if (error.errorFields) {
+      // 表單驗證錯誤
+      message.error('請檢查表單輸入')
+    } else {
+      message.error('保存失敗，請重試')
+    }
   } finally {
     saving.value = false
   }
+}
+
+// 獲取服務 ID（支持多種字段名格式）
+const getServiceId = (service) => {
+  return service?.id || service?.serviceId || service?.service_id || service
+}
+
+// 獲取服務名稱（支持多種字段名格式）
+const getServiceName = (service) => {
+  if (typeof service === 'string') return service
+  return service?.name || service?.serviceName || service?.service_name || service?.title || service?.service_title || String(service)
+}
+
+// 獲取客戶 ID（支持多種字段名格式）
+const getClientId = (client) => {
+  return client?.id || client?.clientId || client?.client_id
+}
+
+// 獲取客戶名稱（支持多種字段名格式）
+const getClientName = (client) => {
+  return client?.name || client?.clientName || client?.client_name || client?.companyName || client?.company_name || String(client)
 }
 
 onMounted(async () => {
@@ -158,6 +216,7 @@ onMounted(async () => {
     ])
   } catch (error) {
     console.error('載入數據失敗:', error)
+    message.error('載入數據失敗，請刷新頁面重試')
   }
 })
 </script>
@@ -193,6 +252,11 @@ onMounted(async () => {
   max-width: 1200px;
 }
 </style>
+
+
+
+
+
 
 
 

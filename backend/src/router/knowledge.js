@@ -37,6 +37,11 @@ export const knowledgeRoutes = [
     handler: withAuth(handleKnowledge),
   },
   {
+    pattern: /^\/api\/v2\/documents\/batch$/,
+    methods: ["DELETE"],
+    handler: withAuth(handleKnowledge),
+  },
+  {
     pattern: /^\/api\/v2\/documents\/(\d+)$/,
     methods: ["GET", "PUT", "DELETE"],
     handler: withAuth(handleKnowledge),
@@ -45,6 +50,16 @@ export const knowledgeRoutes = [
     pattern: /^\/api\/v2\/documents\/(\d+)\/download$/,
     methods: ["GET"],
     handler: withAuth(handleKnowledge),
+  },
+  {
+    pattern: /^\/api\/v2\/documents\/(\d+)\/preview-url$/,
+    methods: ["GET"],
+    handler: withAuth(handleKnowledge),
+  },
+  {
+    pattern: /^\/api\/v2\/documents\/(\d+)\/preview$/,
+    methods: ["GET"],
+    handler: handleKnowledge, // 預覽端點不需要 auth，簽名驗證即為認證
   },
   {
     pattern: /^\/api\/v2\/settings\/sops$/,

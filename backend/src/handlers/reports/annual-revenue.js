@@ -5,6 +5,9 @@
 
 import { successResponse, errorResponse } from "../../utils/response.js";
 import { computeMonthlyRevenue } from "./monthly-revenue.js";
+import { getReportCache, setReportCache, deleteReportCache } from "../../utils/report-cache.js";
+
+const REPORT_TYPE = "annual-revenue";
 
 export async function computeAnnualRevenue(env, year) {
   const monthlyTrend = [];
@@ -296,8 +299,26 @@ export async function handleAnnualRevenue(request, env, ctx, requestId, url) {
       return errorResponse(422, "VALIDATION_ERROR", "請選擇查詢年度", null, requestId);
     }
 
+    const forceRefresh = params.get("refresh") === "1";
+
+    const cached = await getReportCache(env, REPORT_TYPE, year, null, true);
+
+    if (!forceRefresh && cached?.data) {
+      return successResponse(cached.data, "查詢成功", requestId, {
+        cacheHit: true,
+        cachedAt: cached.computedAt || null,
+      });
+    } else {
+      await deleteReportCache(env, REPORT_TYPE, year, null, true).catch(() => {});
+    }
+
     const data = await computeAnnualRevenue(env, year);
-    return successResponse(data, "查詢成功", requestId);
+    await setReportCache(env, REPORT_TYPE, year, data, null, true);
+
+    return successResponse(data, "查詢成功", requestId, {
+      cacheHit: false,
+      refreshed: forceRefresh,
+    });
   } catch (err) {
     console.error(`[AnnualRevenue] Error:`, err);
     return errorResponse(500, "INTERNAL_ERROR", err.message || "伺服器錯誤", null, requestId);

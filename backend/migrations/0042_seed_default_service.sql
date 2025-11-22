@@ -8,3 +8,9 @@ SELECT '一般會計服務', 'ACC_GENERAL', '系統預設服務（自動種子�
 WHERE NOT EXISTS (SELECT 1 FROM Services WHERE is_active = 1);
 
 
+
+
+
+
+
+

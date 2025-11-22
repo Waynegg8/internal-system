@@ -209,6 +209,137 @@ export const downloadDocument = async (id) => {
 }
 
 /**
+ * 獲取文檔預覽 URL
+ * @param {string|number} id - 文檔 ID
+ * @returns {Promise<Object>} API 響應，包含 previewUrl, expiresAt, expiresIn
+ */
+export const getPreviewUrl = async (id) => {
+  try {
+    const response = await request.get(`/documents/${id}/preview-url`)
+    return response
+  } catch (error) {
+    console.error('獲取預覽 URL API 錯誤:', error)
+    if (error.response) {
+      console.error('響應狀態:', error.response.status)
+      console.error('響應數據:', error.response.data)
+      throw new Error(error.response.data?.message || error.response.data?.error || `獲取預覽 URL 失敗: ${error.response.statusText}`)
+    } else if (error.request) {
+      console.error('請求發送但無響應:', error.request)
+      throw new Error('無法連接到伺服器，請檢查網路連接')
+    } else {
+      console.error('請求配置錯誤:', error.message)
+      throw error
+    }
+  }
+}
+
+/**
+ * 更新文檔
+ * @param {string|number} id - 文檔 ID
+ * @param {Object|FormData} data - 文檔數據
+ * @param {string} [data.title] - 標題
+ * @param {string} [data.description] - 描述
+ * @param {string|number} [data.category] - 服務類型分類
+ * @param {Array<string>|string} [data.tags] - 標籤列表
+ * @param {string|number} [data.client_id] - 客戶 ID
+ * @param {number} [data.doc_year] - 年份
+ * @param {number} [data.doc_month] - 月份
+ * @param {string|number} [data.task_id] - 任務 ID
+ * @param {File} [data.file] - 文件（用於文件更換，需後端支援）
+ * @param {Function} [onProgress] - 進度回調函數（用於文件上傳）
+ * @returns {Promise} API 響應
+ */
+export const updateDocument = async (id, data, onProgress) => {
+  try {
+    console.log('更新文檔:', id, data)
+    
+    // 判斷是否為 FormData（文件上傳）
+    const isFormData = data instanceof FormData
+    
+    if (isFormData) {
+      // 文件上傳模式（需後端支援文件更換功能）
+      const response = await request.put(`/documents/${id}`, data, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        onUploadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+            onProgress(percent)
+          }
+        }
+      })
+      return response
+    } else {
+      // 元數據更新模式（JSON）
+      const response = await request.put(`/documents/${id}`, data)
+      return response
+    }
+  } catch (error) {
+    console.error('更新文檔 API 錯誤:', error)
+    if (error.response) {
+      console.error('響應狀態:', error.response.status)
+      console.error('響應數據:', error.response.data)
+      throw new Error(error.response.data?.message || error.response.data?.error || `更新失敗: ${error.response.statusText}`)
+    } else if (error.request) {
+      console.error('請求發送但無響應:', error.request)
+      throw new Error('無法連接到伺服器，請檢查網路連接')
+    } else {
+      console.error('請求配置錯誤:', error.message)
+      throw error
+    }
+  }
+}
+
+/**
+ * 批量刪除文檔
+ * @param {Array<string|number>} ids - 文檔 ID 數組
+ * @returns {Promise} API 響應，包含 success_count, failed_count, success_ids, failed_ids, unauthorized_ids, not_found_ids
+ */
+export const batchDeleteDocuments = async (ids) => {
+  try {
+    console.log('批量刪除文檔:', ids)
+    
+    // 驗證輸入
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new Error('必須提供至少一個文檔ID')
+    }
+    
+    // 轉換為數字並過濾無效值
+    const validIds = ids
+      .map(id => parseInt(id, 10))
+      .filter(id => Number.isInteger(id) && id > 0)
+    
+    if (validIds.length === 0) {
+      throw new Error('無效的文檔ID')
+    }
+    
+    // 發送請求，支援 document_ids 或 ids 參數
+    // 對於 DELETE 請求，axios 需要在 config 中指定 data
+    const response = await request.delete('/documents/batch', {
+      data: {
+        document_ids: validIds
+      }
+    })
+    
+    return response
+  } catch (error) {
+    console.error('批量刪除文檔 API 錯誤:', error)
+    if (error.response) {
+      console.error('響應狀態:', error.response.status)
+      console.error('響應數據:', error.response.data)
+      throw new Error(error.response.data?.message || error.response.data?.error || `批量刪除失敗: ${error.response.statusText}`)
+    } else if (error.request) {
+      console.error('請求發送但無響應:', error.request)
+      throw new Error('無法連接到伺服器，請檢查網路連接')
+    } else {
+      console.error('請求配置錯誤:', error.message)
+      throw error
+    }
+  }
+}
+
+/**
  * 刪除文檔
  * @param {string|number} id - 文檔 ID
  * @returns {Promise} API 響應
@@ -403,8 +534,11 @@ export function useKnowledgeApi() {
     fetchDocuments,
     fetchDocument,
     uploadDocument,
+    updateDocument,
     downloadDocument,
+    getPreviewUrl,
     deleteDocument,
+    batchDeleteDocuments,
     fetchAttachments,
     uploadAttachment,
     downloadAttachment,

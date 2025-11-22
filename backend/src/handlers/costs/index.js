@@ -3,10 +3,10 @@
  */
 
 import { errorResponse } from "../../utils/response.js";
-import { handleGetCosts, handleCreateCost, handleUpdateCost, handleDeleteCost } from "./cost-crud.js";
+import { handleGetCosts, handleCreateCost, handleUpdateCost, handleDeleteCost } from "./cost-records-crud.js";
 import { handleGetCostAnalysis } from "./cost-analysis.js";
 import { handleGetCostTypes, handleCreateCostType, handleUpdateCostType, handleDeleteCostType } from "./cost-types.js";
-import { handleGetEmployeeCosts } from "./cost-allocation.js";
+import { handleGetEmployeeCosts, handleCalculateAllocation } from "./cost-allocation.js";
 import { handleGetTaskCosts, handleGetClientCosts } from "./task-costs.js";
 import { handleGetOverheadTemplate, handleUpdateOverheadTemplate, handlePreviewOverheadGeneration, handleGenerateOverheadCosts } from "./overhead-templates.js";
 
@@ -39,9 +39,23 @@ export async function handleCosts(request, env, ctx, requestId, match, url) {
       return await handleDeleteCostType(request, env, ctx, requestId, match, url);
     }
     
+    // 月度管理費用記錄 - 主要路徑
+    if (method === "GET" && path === '/api/v2/costs/records') {
+      return await handleGetCosts(request, env, ctx, requestId, url);
+    }
+    if (method === "POST" && path === '/api/v2/costs/records') {
+      return await handleCreateCost(request, env, ctx, requestId, url);
+    }
+    if (method === "PUT" && path.match(/^\/api\/v2\/costs\/records\/(\d+)$/)) {
+      return await handleUpdateCost(request, env, ctx, requestId, match, url);
+    }
+    if (method === "DELETE" && path.match(/^\/api\/v2\/costs\/records\/(\d+)$/)) {
+      return await handleDeleteCost(request, env, ctx, requestId, match, url);
+    }
+
     // 月度成本管理 - 支持别名路径（包括舊系統路徑）
-    if (method === "GET" && (path.match(/^\/api\/v2\/costs\/overhead\/(\d+)\/(\d+)$/) || 
-                              path === '/api/v2/admin/costs' || 
+    if (method === "GET" && (path.match(/^\/api\/v2\/costs\/overhead\/(\d+)\/(\d+)$/) ||
+                              path === '/api/v2/admin/costs' ||
                               path === '/internal/api/v1/admin/overhead-costs')) {
       // 从路径中提取year和month
       const yearMonthMatch = path.match(/^\/api\/v2\/costs\/overhead\/(\d+)\/(\d+)$/);
@@ -139,7 +153,7 @@ export async function handleCosts(request, env, ctx, requestId, match, url) {
     }
     
     // 客户成本汇总 - 支持别名路径（包括舊系統路徑）
-    if (method === "GET" && (path.match(/^\/api\/v2\/costs\/client-summary\/(\d+)\/(\d+)$/) || 
+    if (method === "GET" && (path.match(/^\/api\/v2\/costs\/client-summary\/(\d+)\/(\d+)$/) ||
                              path === '/api/v2/admin/client-costs' ||
                              path === '/internal/api/v1/admin/costs/client')) {
       const yearMonthMatch = path.match(/^\/api\/v2\/costs\/client-summary\/(\d+)\/(\d+)$/);
@@ -151,7 +165,12 @@ export async function handleCosts(request, env, ctx, requestId, match, url) {
       }
       return await handleGetClientCosts(request, env, ctx, requestId, url);
     }
-    
+
+    // 成本分攤計算
+    if (method === "POST" && path === '/api/v2/costs/allocation/calculate') {
+      return await handleCalculateAllocation(request, env, ctx, requestId);
+    }
+
     return errorResponse(404, "NOT_FOUND", "路由不存在", null, requestId);
     
   } catch (err) {

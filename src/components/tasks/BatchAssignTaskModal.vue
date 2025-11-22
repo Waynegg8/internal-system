@@ -7,10 +7,13 @@
     @cancel="handleCancel"
   >
     <a-form :model="form" :rules="rules" ref="formRef" layout="vertical">
-      <a-form-item label="已選擇任務數量">
-        <div style="padding: 8px 12px; background: #f5f5f5; border-radius: 4px">
-          已選擇 <strong>{{ selectedTaskIds.length }}</strong> 個任務
-        </div>
+      <a-form-item label="操作確認">
+        <a-alert
+          type="info"
+          :message="`將為 ${selectedTaskIds.length} 個任務分配負責人`"
+          show-icon
+          style="margin-bottom: 16px"
+        />
       </a-form-item>
       
       <a-form-item label="選擇負責人" name="assigneeUserId">

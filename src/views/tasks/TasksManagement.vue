@@ -1,26 +1,6 @@
 <template>
   <div style="padding: 24px">
-    <!-- 操作欄 -->
-    <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap">
-      <a-typography-text v-if="currentView === 'overview' && lastUpdateTime" type="secondary" style="font-size: 13px">
-        最後更新: {{ formatUpdateTime(lastUpdateTime) }}
-      </a-typography-text>
-      <a-button type="primary" @click="handleRefresh" :loading="loading" size="small">
-        刷新
-      </a-button>
-    </div>
-
-    <!-- 視圖切換 Tab -->
-    <a-card :bordered="false" style="margin-bottom: 16px">
-      <a-tabs v-model:activeKey="currentView" @change="handleViewChange" size="small">
-        <a-tab-pane key="list" tab="任務列表">
-          <!-- 列表視圖內容 -->
-        </a-tab-pane>
-        <a-tab-pane key="overview" tab="任務總覽">
-          <!-- 總覽視圖內容 -->
-        </a-tab-pane>
-      </a-tabs>
-    </a-card>
+    <!-- 移除操作欄和視圖切換 Tab，根據需求合併為單一任務列表頁面 -->
 
     <!-- 成功提示 -->
     <a-alert
@@ -55,22 +35,33 @@
       style="margin-bottom: 16px"
     />
 
-    <!-- 列表視圖 -->
-    <div v-if="currentView === 'list'">
+    <!-- 任務列表（合併後的單一頁面） -->
+    <div>
       <!-- 篩選工具欄 -->
       <TaskFilters
         :filters="listFilters"
         :users="allUsers"
         :tags="allTags"
+        :services="allServices"
         :selected-task-ids="selectedTaskIds"
+        :loading="loading"
+        :stats="listStats"
+        :stats-loading="statsLoading"
+        :list-toolbar-all-selected="listToolbarAllSelected"
+        :list-toolbar-indeterminate="listToolbarIndeterminate"
+        :list-toolbar-all-expanded="listToolbarAllExpanded"
         @filters-change="handleListFiltersChange"
         @batch-assign="handleBatchAssign"
-        @add-task="handleAddTask"
+        @refresh="handleRefresh"
+        @stat-click="handleStatClick"
+        @select-all-clients="handleSelectAllClients"
+        @expand-all-clients="handleExpandAllClients"
         style="margin-bottom: 16px"
       />
       
       <!-- 任務分組列表 -->
       <TaskGroupList
+        ref="taskGroupListRef"
         :tasks="listTasks"
         :clients="allClients"
         :loading="loading"
@@ -79,64 +70,11 @@
         @selection-change="handleSelectionChange"
         @view-task="handleViewTask"
         @quick-add-task="handleQuickAddTask"
+        @toolbar-state-change="handleToolbarStateChange"
       />
     </div>
 
-    <!-- 總覽視圖 -->
-    <div v-if="currentView === 'overview'">
-      <!-- 篩選器 -->
-      <TaskOverviewFilters
-        :filters="overviewFilters"
-        :selected-months="selectedMonths"
-        @update:filters="handleOverviewFiltersUpdate"
-        @update:selected-months="handleSelectedMonthsUpdate"
-        @apply="handleApplyOverviewFilters"
-        @expand-all="handleExpandAll"
-        @collapse-all="handleCollapseAll"
-        @expand-overdue="handleExpandOverdue"
-        @toggle-batch-mode="handleToggleBatchMode"
-        style="margin-bottom: 16px"
-      />
-
-      <!-- 統計摘要 -->
-      <TaskOverviewStats
-        :stats="overviewStats"
-        :selected-months="selectedMonths"
-        style="margin-bottom: 16px"
-      />
-
-      <!-- 批量操作欄 -->
-      <BatchActionsBar
-        v-if="batchMode"
-        :selected-count="overviewSelectedTaskCount"
-        @batch-status="handleBatchStatus"
-        @batch-due-date="handleBatchDueDate"
-        @batch-assignee="handleBatchAssignee"
-        @clear="handleClearBatchSelection"
-        style="margin-bottom: 16px"
-      />
-
-      <!-- 任務列表 -->
-      <TaskOverviewList
-        :grouped-tasks="groupedTasks"
-        :expanded-clients="expandedClients"
-        :expanded-services="expandedServices"
-        :loading="loading"
-        :batch-mode="batchMode"
-        :is-task-selected="isTaskSelected"
-        :is-client-selected="isClientSelected"
-        :is-service-selected="isServiceSelected"
-        @toggle-client="handleToggleClient"
-        @toggle-service="handleToggleService"
-        @select-client="handleClientSelect"
-        @select-service="handleServiceSelect"
-        @select-task="handleTaskSelect"
-        @view-detail="handleViewDetail"
-        @status-change="handleStatusChange"
-        @adjust-due-date="handleAdjustDueDate"
-        @record-overdue-reason="handleRecordOverdueReason"
-      />
-    </div>
+    <!-- 總覽視圖已移除，合併為單一任務列表頁面 -->
     
     <!-- 批量分配彈窗 -->
     <BatchAssignTaskModal
@@ -146,23 +84,12 @@
       @success="handleBatchAssignSuccess"
     />
     
-    <!-- 快速新增任務彈窗 -->
-    <QuickAddTaskModal
-      v-model:visible="quickAddTaskModalVisible"
-      :clients="allClients"
-      :services="allServices"
-      :service-items="allServiceItems"
-      :users="allUsers"
-      :tasks="listTasks"
-      :sops="allSOPs"
-      :quick-add-context="quickAddContext"
-      @success="handleQuickAddTaskSuccess"
-    />
+    <!-- 快速新增任務彈窗已移除，改為跳轉到客戶詳情頁 -->
 
     <!-- 批量狀態彈窗 -->
     <BatchStatusModal
       v-model:visible="batchStatusModalVisible"
-      :selected-count="overviewSelectedTaskCount"
+      :selected-count="selectedTaskIds.length"
       @submit="handleBatchStatusSubmit"
       @cancel="handleBatchStatusCancel"
     />
@@ -170,7 +97,7 @@
     <!-- 批量到期日彈窗 -->
     <BatchDueDateModal
       v-model:visible="batchDueDateModalVisible"
-      :selected-count="overviewSelectedTaskCount"
+      :selected-count="selectedTaskIds.length"
       @submit="handleBatchDueDateSubmit"
       @cancel="handleBatchDueDateCancel"
     />
@@ -178,7 +105,7 @@
     <!-- 批量負責人彈窗 -->
     <BatchAssigneeModal
       v-model:visible="batchAssigneeModalVisible"
-      :selected-count="overviewSelectedTaskCount"
+      :selected-count="selectedTaskIds.length"
       :users="allUsers"
       @submit="handleBatchAssigneeSubmit"
       @cancel="handleBatchAssigneeCancel"
@@ -207,18 +134,20 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { usePageAlert } from '@/composables/usePageAlert'
 import { useTaskStore } from '@/stores/tasks'
-import { useTaskOverviewStore } from '@/stores/taskOverview'
+// 移除 useTaskOverviewStore，任務總覽已合併為單一任務列表頁面
 import { fetchAllServices, fetchServiceItems } from '@/api/services'
 import { fetchAllSOPs } from '@/api/sop'
 import { useTaskApi } from '@/api/tasks'
+import { extractApiArray } from '@/utils/apiHelpers'
 import TaskFilters from '@/components/tasks/TaskFilters.vue'
 import TaskGroupList from '@/components/tasks/TaskGroupList.vue'
-import TaskOverviewFilters from '@/components/tasks/TaskOverviewFilters.vue'
-import TaskOverviewStats from '@/components/tasks/TaskOverviewStats.vue'
-import TaskOverviewList from '@/components/tasks/TaskOverviewList.vue'
-import BatchActionsBar from '@/components/tasks/BatchActionsBar.vue'
+// 移除總覽相關組件導入，任務總覽已合併為單一任務列表頁面
+// import TaskOverviewFilters from '@/components/tasks/TaskOverviewFilters.vue'
+// import TaskOverviewStats from '@/components/tasks/TaskOverviewStats.vue'
+// import TaskOverviewList from '@/components/tasks/TaskOverviewList.vue'
+// import BatchActionsBar from '@/components/tasks/BatchActionsBar.vue'
 import BatchAssignTaskModal from '@/components/tasks/BatchAssignTaskModal.vue'
-import QuickAddTaskModal from '@/components/tasks/QuickAddTaskModal.vue'
+// import QuickAddTaskModal from '@/components/tasks/QuickAddTaskModal.vue' // 已移除，改為跳轉到客戶詳情頁
 import BatchStatusModal from '@/components/tasks/BatchStatusModal.vue'
 import BatchDueDateModal from '@/components/tasks/BatchDueDateModal.vue'
 import BatchAssigneeModal from '@/components/tasks/BatchAssigneeModal.vue'
@@ -228,17 +157,13 @@ import RecordOverdueReasonModal from '@/components/tasks/RecordOverdueReasonModa
 const router = useRouter()
 const route = useRoute()
 const taskStore = useTaskStore()
-const overviewStore = useTaskOverviewStore()
+// 移除 overviewStore，任務總覽已合併為單一任務列表頁面
 const { successMessage, errorMessage, warningMessage, showSuccess, showError, showWarning } = usePageAlert()
 
-// 設置頁面標題（根據視圖切換）
+// 設置頁面標題
 const updatePageTitle = () => {
-  const title = currentView.value === 'list' ? '任務列表' : '任務總覽'
-  document.title = `${title} - 內部管理系統`
+  document.title = '任務列表 - 內部管理系統'
 }
-
-// 視圖狀態
-const currentView = ref('list') // 'list' 或 'overview'
 
 // 列表視圖相關
 const listTasks = computed(() => taskStore.tasks)
@@ -248,28 +173,16 @@ const allClients = computed(() => taskStore.allClients)
 const allUsers = computed(() => taskStore.allUsers)
 const allTags = computed(() => taskStore.allTags)
 const allSOPs = computed(() => taskStore.allSOPs)
-const loading = computed(() => taskStore.loading || overviewStore.loading)
-const error = computed(() => taskStore.error || overviewStore.error)
+const loading = computed(() => taskStore.loading)
+const error = computed(() => taskStore.error)
 
-// 總覽視圖相關
-const groupedTasks = computed(() => overviewStore.groupedTasks)
-const overviewStats = computed(() => overviewStore.stats)
-const overviewFilters = computed(() => overviewStore.filters)
-const selectedMonths = computed(() => overviewStore.selectedMonths)
-const expandedClients = computed(() => overviewStore.expandedClients)
-const expandedServices = computed(() => overviewStore.expandedServices)
-const overviewSelectedTaskCount = computed(() => overviewStore.selectedTaskCount)
-const isTaskSelected = computed(() => overviewStore.isTaskSelected)
-const isClientSelected = computed(() => overviewStore.isClientSelected)
-const isServiceSelected = computed(() => overviewStore.isServiceSelected)
-const lastUpdateTime = computed(() => overviewStore.lastUpdateTime)
-const batchSelectedTasks = computed(() => overviewStore.batchSelectedTasks)
+// 總覽視圖相關已移除，合併為單一任務列表頁面
 
 // 本地狀態
 const batchMode = ref(false)
 const batchAssignModalVisible = ref(false)
-const quickAddTaskModalVisible = ref(false)
-const quickAddContext = ref(null)
+// const quickAddTaskModalVisible = ref(false) // 已移除
+// const quickAddContext = ref(null) // 已移除
 const allServices = ref([])
 const allServiceItems = ref([])
 const batchStatusModalVisible = ref(false)
@@ -279,6 +192,24 @@ const adjustDueDateModalVisible = ref(false)
 const recordOverdueReasonModalVisible = ref(false)
 const selectedTaskForAction = ref(null)
 
+// 列表視圖統計數據狀態
+const listStats = ref({
+  total: 0,
+  in_progress: 0,
+  completed: 0,
+  overdue: 0,
+  can_start: 0
+})
+const statsLoading = ref(false)
+
+// 工具欄狀態
+const listToolbarAllSelected = ref(false)
+const listToolbarIndeterminate = ref(false)
+const listToolbarAllExpanded = ref(false)
+
+// TaskGroupList ref
+const taskGroupListRef = ref(null)
+
 // 格式化更新時間
 const formatUpdateTime = (time) => {
   if (!time) return '--'
@@ -286,27 +217,9 @@ const formatUpdateTime = (time) => {
   return date.toLocaleTimeString('zh-TW')
 }
 
-// 視圖切換處理
-const handleViewChange = (key) => {
-  currentView.value = key
-  updatePageTitle()
-  
-  // 切換視圖時載入對應數據
-  if (key === 'list') {
-    // 列表視圖：如果還沒有數據，載入數據
-    if (listTasks.value.length === 0) {
-      loadListData()
-    }
-  } else if (key === 'overview') {
-    // 總覽視圖：恢復篩選條件並載入數據
-    overviewStore.restoreFilters()
-    if (selectedMonths.value.length > 0) {
-      loadOverviewData()
-    }
-  }
-}
+// 移除視圖切換處理，任務總覽已合併為單一任務列表頁面
 
-// 載入列表視圖數據
+// 載入任務列表數據
 const loadListData = async () => {
   try {
     await Promise.all([
@@ -314,19 +227,11 @@ const loadListData = async () => {
       taskStore.fetchTasks(),
       loadServices(),
       loadServiceItems(),
-      loadSOPs()
+      loadSOPs(),
+      loadListStats()
     ])
   } catch (err) {
     console.error('載入列表數據失敗:', err)
-  }
-}
-
-// 載入總覽視圖數據
-const loadOverviewData = async () => {
-  try {
-    await overviewStore.fetchTaskOverview()
-  } catch (err) {
-    console.error('載入總覽數據失敗:', err)
   }
 }
 
@@ -334,7 +239,7 @@ const loadOverviewData = async () => {
 const loadServices = async () => {
   try {
     const response = await fetchAllServices()
-    allServices.value = response.data || []
+    allServices.value = extractApiArray(response, [])
   } catch (err) {
     console.error('載入服務列表失敗:', err)
   }
@@ -344,7 +249,7 @@ const loadServices = async () => {
 const loadServiceItems = async () => {
   try {
     const response = await fetchServiceItems()
-    allServiceItems.value = response.data || []
+    allServiceItems.value = extractApiArray(response, [])
   } catch (err) {
     console.error('載入服務項目列表失敗:', err)
   }
@@ -354,7 +259,7 @@ const loadServiceItems = async () => {
 const loadSOPs = async () => {
   try {
     const response = await fetchAllSOPs({ perPage: 500, scope: 'task' })
-    allSOPs.value = response.data || []
+    allSOPs.value = extractApiArray(response, [])
   } catch (err) {
     console.error('載入 SOP 列表失敗:', err)
   }
@@ -363,13 +268,8 @@ const loadSOPs = async () => {
 // 立即刷新
 const handleRefresh = async () => {
   try {
-    if (currentView.value === 'list') {
-      await loadListData()
-      showSuccess('刷新成功')
-    } else {
-      await loadOverviewData()
-      showSuccess('刷新成功')
-    }
+    await loadListData()
+    showSuccess('刷新成功')
   } catch (error) {
     console.error('刷新失敗:', error)
   }
@@ -377,10 +277,123 @@ const handleRefresh = async () => {
 
 // ========== 列表視圖處理函數 ==========
 
+// 載入列表視圖統計數據
+const loadListStats = async () => {
+  try {
+    statsLoading.value = true
+    const filters = listFilters.value
+    const params = {}
+    
+    // 構建查詢參數（與 taskStore.fetchTasks 邏輯保持一致）
+    if (filters.q) params.q = filters.q
+    if (filters.status) params.status = filters.status
+    if (filters.assignee) params.assignee = filters.assignee
+    
+    // 處理標籤篩選（優先使用多選，否則使用單選）
+    if (Array.isArray(filters.tags_multiple) && filters.tags_multiple.length > 0) {
+      params.tags = filters.tags_multiple[0]
+    } else if (filters.tags) {
+      params.tags = filters.tags
+    }
+    
+    // 處理月份區間篩選
+    if (filters.service_month_start || filters.service_month_end) {
+      if (filters.service_month_start) {
+        const startMonth = filters.service_month_start
+        if (typeof startMonth === 'string' && /^\d{4}-\d{2}$/.test(startMonth)) {
+          const [year, month] = startMonth.split('-')
+          params.service_year = year
+          params.service_month = month
+        }
+      }
+    } else if (filters.service_year) {
+      params.service_year = filters.service_year
+      if (filters.service_month) {
+        params.service_month = filters.service_month
+      }
+    }
+    
+    if (filters.due) params.due = filters.due
+    if (filters.hide_completed) params.hide_completed = '1'
+    if (filters.can_start !== null && filters.can_start !== undefined) {
+      params.can_start = filters.can_start ? 'true' : 'false'
+    }
+    
+    // 調用統計 API
+    const taskApi = useTaskApi()
+    const stats = await taskApi.getTasksStats(params)
+    
+    listStats.value = {
+      total: stats.total || 0,
+      in_progress: stats.in_progress || 0,
+      completed: stats.completed || 0,
+      overdue: stats.overdue || 0,
+      can_start: stats.can_start || 0
+    }
+  } catch (err) {
+    console.error('載入統計數據失敗:', err)
+    listStats.value = {
+      total: 0,
+      in_progress: 0,
+      completed: 0,
+      overdue: 0,
+      can_start: 0
+    }
+  } finally {
+    statsLoading.value = false
+  }
+}
+
 // 處理列表篩選條件變化
-const handleListFiltersChange = (filters) => {
+const handleListFiltersChange = async (filters) => {
   taskStore.setFilters(filters)
-  taskStore.fetchTasks()
+  await taskStore.fetchTasks()
+  // 篩選條件變更時即時更新統計數據
+  await loadListStats()
+}
+
+// 處理統計項點擊
+const handleStatClick = (statType) => {
+  const filters = { ...listFilters.value }
+  
+  // 根據點擊的統計類型設置對應的篩選條件
+  if (statType === 'in_progress') {
+    filters.status = 'in_progress'
+  } else if (statType === 'completed') {
+    filters.status = 'completed'
+  } else if (statType === 'overdue') {
+    filters.due = 'overdue'
+  } else if (statType === 'can_start') {
+    filters.can_start = true
+  } else if (statType === 'total') {
+    // 點擊總任務，清除所有狀態篩選
+    filters.status = null
+    filters.due = null
+    filters.can_start = null
+  }
+  
+  handleListFiltersChange(filters)
+}
+
+// 處理工具欄狀態變化
+const handleToolbarStateChange = (state) => {
+  listToolbarAllSelected.value = state.allSelected
+  listToolbarIndeterminate.value = state.indeterminate
+  listToolbarAllExpanded.value = state.allExpanded
+}
+
+// 處理全選客戶
+const handleSelectAllClients = (checked) => {
+  if (taskGroupListRef.value) {
+    taskGroupListRef.value.handleSelectAll({ target: { checked } })
+  }
+}
+
+// 處理一鍵展開/收合
+const handleExpandAllClients = () => {
+  if (taskGroupListRef.value) {
+    taskGroupListRef.value.handleExpandAll()
+  }
 }
 
 // 處理任務選擇變化
@@ -414,296 +427,56 @@ const handleBatchAssignSuccess = async (assigneeUserId) => {
   }
 }
 
-// 處理新增任務（跳轉到新增頁面）
-const handleAddTask = () => {
-  router.push('/tasks/new')
-}
-
-// 處理快速新增任務（從服務組點擊）
+// 處理快速新增任務（從服務組點擊）- 根據需求應該跳轉到客戶服務配置頁面
 const handleQuickAddTask = (context) => {
-  quickAddContext.value = context
-  quickAddTaskModalVisible.value = true
-}
-
-// 處理快速新增任務成功
-const handleQuickAddTaskSuccess = async (payload) => {
-  try {
-    // 如果需要調整後續任務
-    if (payload.adjust_subsequent_tasks) {
-      const { task_ids, new_due_date } = payload.adjust_subsequent_tasks
-      
-      // 批量更新後續任務的到期日
-      const updatePromises = task_ids.map(async (taskId) => {
-        try {
-          await useTaskApi().adjustTaskDueDate(taskId, {
-            due_date: new_due_date,
-            reason: '前置任務新增導致自動延後'
-          })
-        } catch (err) {
-          console.error(`更新任務 ${taskId} 失敗:`, err)
-        }
-      })
-      
-      await Promise.all(updatePromises)
-    }
-    
-    // 創建任務
-    const { adjust_subsequent_tasks, ...createPayload } = payload
-    await taskStore.createTask(createPayload)
-    
-    showSuccess('任務新增成功' + (payload.adjust_subsequent_tasks ? '，已自動延後後續任務' : ''))
-    
-    // 刷新任務列表
-    await taskStore.fetchTasks()
-    
-    // 關閉彈窗
-    quickAddTaskModalVisible.value = false
-    quickAddContext.value = null
-  } catch (err) {
-    showError(err.message || '新增任務失敗')
+  // 根據用戶反饋和 requirements.md，應該跳轉到客戶服務配置頁面，讓用戶在客戶頁設定任務
+  // 檢查是否有 clientId 和 clientServiceId
+  if (context.clientId && context.clientServiceId) {
+    // 跳轉到客戶服務配置頁面
+    router.push({
+      name: 'ClientServiceConfig',
+      params: { 
+        clientId: context.clientId,
+        clientServiceId: context.clientServiceId 
+      }
+    })
+  } else if (context.clientId) {
+    // 如果只有 clientId，跳轉到客戶詳情頁的服務標籤
+    router.push({
+      name: 'ClientServices',
+      params: { id: context.clientId },
+      query: context.clientServiceId ? { serviceId: context.clientServiceId } : {}
+    })
+  } else {
+    // 如果沒有 clientId，顯示錯誤
+    showError('無法確定客戶資訊，請從客戶頁面設定任務')
   }
 }
 
-// ========== 總覽視圖處理函數 ==========
+// 處理快速新增任務成功已移除，改為跳轉到客戶詳情頁
 
-// 處理總覽篩選條件更新
-const handleOverviewFiltersUpdate = (filters) => {
-  overviewStore.setFilters(filters)
-}
-
-// 處理選中月份更新
-const handleSelectedMonthsUpdate = (months) => {
-  overviewStore.setSelectedMonths(months)
-}
-
-// 套用總覽篩選
-const handleApplyOverviewFilters = async () => {
-  if (selectedMonths.value.length === 0) {
-    showWarning('請至少選擇一個月份')
-    return
-  }
-  
-  try {
-    await overviewStore.fetchTaskOverview()
-    showSuccess('載入成功')
-  } catch (error) {
-    console.error('載入任務總覽失敗:', error)
-  }
-}
-
-// 全部展開
-const handleExpandAll = () => {
-  overviewStore.expandAllClients(true)
-}
-
-// 全部折疊
-const handleCollapseAll = () => {
-  overviewStore.expandAllClients(false)
-}
-
-// 只展開逾期
-const handleExpandOverdue = () => {
-  overviewStore.expandOnlyOverdue()
-}
-
-// 切換批量操作模式
-const handleToggleBatchMode = (enabled) => {
-  batchMode.value = enabled
-  if (!enabled) {
-    overviewStore.clearBatchSelection()
-  }
-}
-
-// 切換客戶展開/折疊
-const handleToggleClient = (clientId) => {
-  overviewStore.toggleClientExpanded(clientId)
-}
-
-// 切換服務展開/折疊
-const handleToggleService = (serviceKey) => {
-  overviewStore.toggleServiceExpanded(serviceKey)
-}
-
-// 查看任務詳情
-const handleViewDetail = (taskId) => {
-  router.push(`/tasks/${taskId}`)
-}
-
-// 批量選擇相關
-const handleTaskSelect = (taskId) => {
-  overviewStore.toggleTaskSelection(taskId)
-}
-
-const handleClientSelect = (clientId) => {
-  overviewStore.toggleClientSelection(clientId)
-}
-
-const handleServiceSelect = (serviceKey) => {
-  overviewStore.toggleServiceSelection(serviceKey)
-}
-
-const handleClearBatchSelection = () => {
-  overviewStore.clearBatchSelection()
-}
-
-// 批量操作
-const handleBatchStatus = () => {
-  if (overviewSelectedTaskCount.value === 0) {
-    showWarning('請先選擇任務')
-    return
-  }
-  batchStatusModalVisible.value = true
-}
-
-const handleBatchStatusSubmit = async (status) => {
-  try {
-    const selectedTaskIds = Array.from(batchSelectedTasks.value || [])
-    await overviewStore.batchUpdateStatus(selectedTaskIds, status)
-    showSuccess('批量更新狀態成功')
-    batchStatusModalVisible.value = false
-  } catch (error) {
-    showError(error.message || '批量更新狀態失敗')
-  }
-}
-
-const handleBatchStatusCancel = () => {
-  batchStatusModalVisible.value = false
-}
-
-const handleBatchDueDate = () => {
-  if (overviewSelectedTaskCount.value === 0) {
-    showWarning('請先選擇任務')
-    return
-  }
-  batchDueDateModalVisible.value = true
-}
-
-const handleBatchDueDateSubmit = async (dueDate, reason) => {
-  try {
-    const selectedTaskIds = Array.from(batchSelectedTasks.value || [])
-    await overviewStore.batchUpdateDueDate(selectedTaskIds, dueDate, reason)
-    showSuccess('批量調整到期日成功')
-    batchDueDateModalVisible.value = false
-  } catch (error) {
-    showError(error.message || '批量調整到期日失敗')
-  }
-}
-
-const handleBatchDueDateCancel = () => {
-  batchDueDateModalVisible.value = false
-}
-
-const handleBatchAssignee = () => {
-  if (overviewSelectedTaskCount.value === 0) {
-    showWarning('請先選擇任務')
-    return
-  }
-  batchAssigneeModalVisible.value = true
-}
-
-const handleBatchAssigneeSubmit = async (assigneeId) => {
-  try {
-    const selectedTaskIds = Array.from(batchSelectedTasks.value || [])
-    await overviewStore.batchUpdateAssignee(selectedTaskIds, assigneeId)
-    showSuccess('批量分配負責人成功')
-    batchAssigneeModalVisible.value = false
-  } catch (error) {
-    showError(error.message || '批量分配負責人失敗')
-  }
-}
-
-const handleBatchAssigneeCancel = () => {
-  batchAssigneeModalVisible.value = false
-}
-
-// 單個任務操作
-const handleStatusChange = async (taskId, status) => {
-  try {
-    await overviewStore.updateTaskStatus(taskId, status)
-    showSuccess('更新狀態成功')
-  } catch (error) {
-    showError(error.message || '更新狀態失敗')
-  }
-}
-
-const handleAdjustDueDate = (taskId) => {
-  const task = overviewStore.tasks.find(t => {
-    const id = t.task_id || t.taskId || t.id
-    return id === taskId
-  })
-  selectedTaskForAction.value = task
-  adjustDueDateModalVisible.value = true
-}
-
-const handleAdjustDueDateSubmit = async (taskId, dueDate, reason) => {
-  try {
-    await overviewStore.adjustTaskDueDate(taskId, dueDate, reason)
-    showSuccess('調整到期日成功')
-    adjustDueDateModalVisible.value = false
-    selectedTaskForAction.value = null
-  } catch (error) {
-    showError(error.message || '調整到期日失敗')
-  }
-}
-
-const handleAdjustDueDateCancel = () => {
-  adjustDueDateModalVisible.value = false
-  selectedTaskForAction.value = null
-}
-
-const handleRecordOverdueReason = (taskId) => {
-  const task = overviewStore.tasks.find(t => {
-    const id = t.task_id || t.taskId || t.id
-    return id === taskId
-  })
-  selectedTaskForAction.value = task
-  recordOverdueReasonModalVisible.value = true
-}
-
-const handleRecordOverdueReasonSubmit = async (taskId, reason) => {
-  try {
-    await overviewStore.recordOverdueReason(taskId, reason)
-    showSuccess('記錄逾期原因成功')
-    recordOverdueReasonModalVisible.value = false
-    selectedTaskForAction.value = null
-  } catch (error) {
-    showError(error.message || '記錄逾期原因失敗')
-  }
-}
-
-const handleRecordOverdueReasonCancel = () => {
-  recordOverdueReasonModalVisible.value = false
-  selectedTaskForAction.value = null
-}
+// ========== 總覽視圖處理函數已移除，合併為單一任務列表頁面 ==========
 
 // 處理關閉錯誤提示
 const handleCloseError = () => {
   taskStore.error = null
-  overviewStore.clearError()
 }
 
 // 初始化
 onMounted(async () => {
-  // 從 URL 參數判斷預設視圖
-  const currentRoute = router.currentRoute.value
-  if (currentRoute.query.view === 'overview') {
-    currentView.value = 'overview'
-    overviewStore.restoreFilters()
-    if (selectedMonths.value.length > 0) {
-      await loadOverviewData()
-    }
-  } else {
-    // 預設載入列表視圖
-    currentView.value = 'list'
-    // 設置默認篩選條件：當前年份、全部月份、隱藏已完成
-    const currentYear = new Date().getFullYear()
-    taskStore.setFilters({
-      service_year: currentYear,
-      service_month: null,
-      hide_completed: true
-    })
-    await loadListData()
-  }
+  // 設置默認篩選條件：不限制年份和月份，顯示所有任務，隱藏已完成
+  // 確保 service_types 和 tags_multiple 為 undefined，而不是 null 或空數組
+  // 使用 undefined 以確保 Ant Design Vue multiple mode 正確顯示 placeholder
+  taskStore.setFilters({
+    service_year: null,
+    service_month: null,
+    hide_completed: true,
+    service_types: undefined,
+    tags_multiple: undefined,
+    service_month_start: null,
+    service_month_end: null
+  })
+  await loadListData()
   
   // 設置初始頁面標題
   updatePageTitle()

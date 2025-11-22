@@ -451,11 +451,10 @@ export async function handleUploadDocument(request, env, ctx, requestId, url) {
 export async function handleUpdateDocument(request, env, ctx, requestId, match, url) {
   const user = ctx?.user;
   const docId = match[1];
-  const body = await request.json();
   
-  // 检查文档是否存在
+  // 检查文档是否存在，获取完整信息包括 file_url
   const existing = await env.DATABASE.prepare(
-    `SELECT document_id, uploaded_by FROM InternalDocuments WHERE document_id = ? AND is_deleted = 0`
+    `SELECT document_id, uploaded_by, file_url, file_name, file_size, file_type FROM InternalDocuments WHERE document_id = ? AND is_deleted = 0`
   ).bind(docId).first();
   
   if (!existing) {
@@ -467,44 +466,178 @@ export async function handleUpdateDocument(request, env, ctx, requestId, match, 
     return errorResponse(403, "FORBIDDEN", "無權更新此文檔", null, requestId);
   }
   
+  // 检查请求内容类型，判断是 JSON 还是 FormData（文件上传）
+  const contentType = request.headers.get('content-type') || '';
+  const isFormData = contentType.includes('multipart/form-data');
+  
+  const oldFileUrl = existing.file_url;
+  let newFileUrl = null;
+  let newFileName = null;
+  let newFileSize = null;
+  let newFileType = null;
+  let fileUploadError = null;
+  
+  // 解析请求数据
+  let metadata = {};
+  
+  if (isFormData) {
+    // FormData 请求：处理文件上传和元数据
+    const formData = await request.formData();
+    const file = formData.get('file');
+    
+    // 处理文件上传
+    if (file && file instanceof File) {
+      try {
+        // 验证文件大小（最大 25MB）
+        if (file.size > 25 * 1024 * 1024) {
+          return errorResponse(413, "FILE_TOO_LARGE", "文件大小不能超過 25MB", null, requestId);
+        }
+        
+        // 检查 R2 是否配置
+        if (!env.R2_BUCKET) {
+          return errorResponse(500, "CONFIG_ERROR", "R2 存储未配置", null, requestId);
+        }
+        
+        // 生成新的 R2 对象键
+        const now = Date.now();
+        const envName = String(env.APP_ENV || 'dev');
+        const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        newFileUrl = `private/${envName}/documents/${now}_${sanitizedFileName}`;
+        newFileName = file.name;
+        newFileSize = file.size;
+        newFileType = file.type || 'application/octet-stream';
+        
+        // 读取文件内容
+        const fileBody = await file.arrayBuffer();
+        
+        // 上传新文件到 R2
+        await env.R2_BUCKET.put(newFileUrl, fileBody, {
+          httpMetadata: {
+            contentType: newFileType,
+            contentDisposition: `attachment; filename="${file.name}"`
+          },
+          customMetadata: {
+            ownerId: String(user.user_id),
+            module: 'documents',
+            replacedDocumentId: String(docId)
+          }
+        });
+      } catch (err) {
+        console.error(`[Documents Update] File upload error:`, err);
+        fileUploadError = err.message || '文件上傳失敗';
+        // 如果文件上传失败，保留原有文件，仅更新元数据
+      }
+    }
+    
+    // 从 FormData 提取元数据
+    const title = formData.get('title');
+    const description = formData.get('description');
+    const category = formData.get('category');
+    const scope = formData.get('scope');
+    const clientId = formData.get('client_id');
+    const docYear = formData.get('doc_year');
+    const docMonth = formData.get('doc_month');
+    const taskId = formData.get('task_id');
+    const tags = formData.get('tags');
+    
+    if (title !== null && title !== undefined) metadata.title = String(title || "").trim();
+    if (formData.has('description')) metadata.description = description ? String(description).trim() : null;
+    if (formData.has('category')) metadata.category = category ? String(category).trim() : null;
+    if (formData.has('scope')) metadata.scope = scope ? String(scope).trim() : null;
+    if (formData.has('tags')) metadata.tags = tags ? String(tags) : '';
+    if (formData.has('client_id')) metadata.client_id = clientId ? parseInt(clientId) : null;
+    if (formData.has('doc_year')) metadata.doc_year = docYear ? parseInt(docYear) : null;
+    if (formData.has('doc_month')) metadata.doc_month = docMonth ? parseInt(docMonth) : null;
+    if (formData.has('task_id')) metadata.task_id = taskId ? parseInt(taskId) : null;
+  } else {
+    // JSON 请求：仅更新元数据
+    metadata = await request.json();
+  }
+  
+  // 构建更新 SQL
   const updates = [];
   const binds = [];
   
-  if (body.hasOwnProperty('title')) {
+  // 处理元数据字段
+  if (metadata.hasOwnProperty('title') && metadata.title !== undefined) {
     updates.push("title = ?");
-    binds.push(String(body.title || "").trim());
+    binds.push(String(metadata.title || "").trim());
   }
-  if (body.hasOwnProperty('description')) {
+  if (metadata.hasOwnProperty('description') && metadata.description !== undefined) {
     updates.push("description = ?");
-    binds.push(String(body.description || "").trim() || null);
+    binds.push(String(metadata.description || "").trim() || null);
   }
-  if (body.hasOwnProperty('category')) {
+  if (metadata.hasOwnProperty('category') && metadata.category !== undefined) {
     updates.push("category = ?");
-    binds.push(String(body.category || "").trim() || null);
+    binds.push(String(metadata.category || "").trim() || null);
   }
-  if (body.hasOwnProperty('tags')) {
-    const tagsStr = Array.isArray(body.tags) ? body.tags.join(',') : String(body.tags || "");
+  if (metadata.hasOwnProperty('scope') && metadata.scope !== undefined) {
+    const scope = String(metadata.scope || "").trim();
+    // 验证 scope 必须是 'service' 或 'task'
+    if (scope && scope !== 'service' && scope !== 'task') {
+      // 如果文件已上传但验证失败，删除新上传的文件
+      if (newFileUrl && env.R2_BUCKET) {
+        try {
+          await env.R2_BUCKET.delete(newFileUrl);
+        } catch (err) {
+          console.warn(`[Documents Update] Failed to delete newly uploaded file:`, err);
+        }
+      }
+      return errorResponse(422, "VALIDATION_ERROR", "適用層級必須是 'service' 或 'task'", 
+        [{ field: "scope", message: "適用層級必須是 'service' 或 'task'" }], requestId);
+    }
+    updates.push("scope = ?");
+    binds.push(scope || null);
+  }
+  if (metadata.hasOwnProperty('tags') && metadata.tags !== undefined) {
+    const tagsStr = Array.isArray(metadata.tags) ? metadata.tags.join(',') : String(metadata.tags || "");
     updates.push("tags = ?");
     binds.push(tagsStr);
   }
-  if (body.hasOwnProperty('client_id')) {
+  if (metadata.hasOwnProperty('client_id') && metadata.client_id !== undefined) {
     updates.push("client_id = ?");
-    binds.push(body.client_id ? parseInt(body.client_id) : null);
+    binds.push(metadata.client_id ? parseInt(metadata.client_id) : null);
   }
-  if (body.hasOwnProperty('doc_year')) {
+  if (metadata.hasOwnProperty('doc_year') && metadata.doc_year !== undefined) {
     updates.push("doc_year = ?");
-    binds.push(body.doc_year ? parseInt(body.doc_year) : null);
+    binds.push(metadata.doc_year ? parseInt(metadata.doc_year) : null);
   }
-  if (body.hasOwnProperty('doc_month')) {
+  if (metadata.hasOwnProperty('doc_month') && metadata.doc_month !== undefined) {
     updates.push("doc_month = ?");
-    binds.push(body.doc_month ? parseInt(body.doc_month) : null);
+    binds.push(metadata.doc_month ? parseInt(metadata.doc_month) : null);
   }
-  if (body.hasOwnProperty('task_id')) {
+  if (metadata.hasOwnProperty('task_id') && metadata.task_id !== undefined) {
     updates.push("task_id = ?");
-    binds.push(body.task_id ? parseInt(body.task_id) : null);
+    binds.push(metadata.task_id ? parseInt(metadata.task_id) : null);
   }
   
+  // 如果有文件上传错误，返回错误（但允许仅更新元数据的情况）
+  if (fileUploadError && updates.length === 0) {
+    return errorResponse(500, "FILE_UPLOAD_ERROR", `文件上傳失敗: ${fileUploadError}，已保留原有文件`, null, requestId);
+  }
+  
+  // 如果有新文件上传成功，更新文件相关字段
+  if (newFileUrl && !fileUploadError) {
+    updates.push("file_url = ?");
+    binds.push(newFileUrl);
+    updates.push("file_name = ?");
+    binds.push(newFileName);
+    updates.push("file_size = ?");
+    binds.push(newFileSize);
+    updates.push("file_type = ?");
+    binds.push(newFileType);
+  }
+  
+  // 如果没有可更新的字段
   if (updates.length === 0) {
+    // 如果文件已上传但验证失败，删除新上传的文件
+    if (newFileUrl && env.R2_BUCKET) {
+      try {
+        await env.R2_BUCKET.delete(newFileUrl);
+      } catch (err) {
+        console.warn(`[Documents Update] Failed to delete newly uploaded file:`, err);
+      }
+    }
     return errorResponse(400, "BAD_REQUEST", "沒有可更新的欄位", null, requestId);
   }
   
@@ -512,14 +645,52 @@ export async function handleUpdateDocument(request, env, ctx, requestId, match, 
   binds.push(new Date().toISOString());
   binds.push(docId);
   
-  await env.DATABASE.prepare(
-    `UPDATE InternalDocuments SET ${updates.join(", ")} WHERE document_id = ?`
-  ).bind(...binds).run();
-  
-  // 清除文档列表的 KV 缓存
-  await deleteKVCacheByPrefix(env, 'documents_list').catch(() => {});
-  
-  return successResponse({ document_id: docId }, "已更新", requestId);
+  try {
+    // 更新数据库
+    await env.DATABASE.prepare(
+      `UPDATE InternalDocuments SET ${updates.join(", ")} WHERE document_id = ?`
+    ).bind(...binds).run();
+    
+    // 如果新文件上传成功且数据库更新成功，删除旧文件
+    if (newFileUrl && !fileUploadError && oldFileUrl && env.R2_BUCKET) {
+      try {
+        await env.R2_BUCKET.delete(oldFileUrl);
+      } catch (err) {
+        console.warn(`[Documents Update] Failed to delete old R2 file ${oldFileUrl}:`, err);
+        // 继续执行，即使旧文件删除失败
+      }
+    }
+    
+    // 清除文档列表的 KV 缓存
+    await deleteKVCacheByPrefix(env, 'documents_list').catch(() => {});
+    
+    const responseData = { document_id: docId };
+    if (newFileUrl && !fileUploadError) {
+      responseData.fileUrl = newFileUrl;
+      responseData.fileName = newFileName;
+      responseData.fileSize = newFileSize;
+    }
+    
+    let message = "已更新";
+    if (newFileUrl && !fileUploadError) {
+      message = "已更新（包含文件更換）";
+    } else if (fileUploadError) {
+      message = `已更新元數據，但文件上傳失敗: ${fileUploadError}，已保留原有文件`;
+    }
+    
+    return successResponse(responseData, message, requestId);
+  } catch (dbError) {
+    // 如果数据库更新失败，删除新上传的文件
+    if (newFileUrl && env.R2_BUCKET) {
+      try {
+        await env.R2_BUCKET.delete(newFileUrl);
+      } catch (err) {
+        console.warn(`[Documents Update] Failed to delete newly uploaded file after DB error:`, err);
+      }
+    }
+    console.error(`[Documents Update] Database error:`, dbError);
+    return errorResponse(500, "DATABASE_ERROR", `更新失敗: ${dbError.message || '未知錯誤'}`, null, requestId);
+  }
 }
 
 /**
@@ -543,17 +714,7 @@ export async function handleDeleteDocument(request, env, ctx, requestId, match, 
     return errorResponse(403, "FORBIDDEN", "無權刪除此文檔", null, requestId);
   }
   
-  // 从R2删除文件
-  if (env.R2_BUCKET && existing.file_url) {
-    try {
-      await env.R2_BUCKET.delete(existing.file_url);
-    } catch (err) {
-      console.warn(`[Documents] Failed to delete R2 file:`, err);
-      // 继续执行数据库删除，即使R2删除失败
-    }
-  }
-  
-  // 软删除数据库记录
+  // 软删除数据库记录（僅執行軟刪除，不從 R2 刪除文件）
   await env.DATABASE.prepare(
     `UPDATE InternalDocuments SET is_deleted = 1, updated_at = ? WHERE document_id = ?`
   ).bind(new Date().toISOString(), docId).run();
@@ -562,6 +723,139 @@ export async function handleDeleteDocument(request, env, ctx, requestId, match, 
   await deleteKVCacheByPrefix(env, 'documents_list').catch(() => {});
   
   return successResponse({ document_id: docId }, "已刪除", requestId);
+}
+
+/**
+ * 批量删除文档
+ */
+export async function handleBatchDeleteDocuments(request, env, ctx, requestId, url) {
+  const user = ctx?.user;
+  
+  // 驗證用戶身份
+  if (!user || !user.user_id) {
+    return errorResponse(401, "UNAUTHORIZED", "未登入或身份驗證失敗", null, requestId);
+  }
+  
+  let body;
+  try {
+    body = await request.json();
+  } catch (_) {
+    return errorResponse(400, "BAD_REQUEST", "請求格式錯誤", null, requestId);
+  }
+  
+  const documentIds = body?.document_ids || body?.ids || [];
+  
+  // 驗證輸入參數
+  if (!Array.isArray(documentIds) || documentIds.length === 0) {
+    return errorResponse(422, "VALIDATION_ERROR", "文檔ID列表不能為空", 
+      [{ field: "document_ids", message: "必須提供至少一個文檔ID" }], requestId);
+  }
+  
+  // 驗證所有 ID 都是有效的數字
+  const validDocumentIds = documentIds
+    .map(id => parseInt(id, 10))
+    .filter(id => Number.isInteger(id) && id > 0);
+  
+  if (validDocumentIds.length === 0) {
+    return errorResponse(422, "VALIDATION_ERROR", "無效的文檔ID", 
+      [{ field: "document_ids", message: "所有ID必須為正整數" }], requestId);
+  }
+  
+  try {
+    // 獲取所有文檔信息，用於權限檢查
+    const placeholders = validDocumentIds.map(() => '?').join(',');
+    const documents = await env.DATABASE.prepare(
+      `SELECT document_id, uploaded_by, file_url 
+       FROM InternalDocuments 
+       WHERE document_id IN (${placeholders}) AND is_deleted = 0`
+    ).bind(...validDocumentIds).all();
+    
+    if (!documents?.results || documents.results.length === 0) {
+      return errorResponse(404, "NOT_FOUND", "未找到任何文檔記錄", null, requestId);
+    }
+    
+    const foundDocuments = documents.results;
+    const foundIds = new Set(foundDocuments.map(d => d.document_id));
+    const missingIds = validDocumentIds.filter(id => !foundIds.has(id));
+    
+    // 處理每個文檔的刪除
+    const successIds = [];
+    const failedIds = [];
+    const unauthorizedIds = [];
+    const notFoundIds = [...missingIds];
+    
+    const updatedAt = new Date().toISOString();
+    
+    for (const doc of foundDocuments) {
+      const docId = doc.document_id;
+      
+      // 權限檢查：只有上傳者或管理員可以刪除
+      if (String(doc.uploaded_by) !== String(user.user_id) && !user.is_admin) {
+        unauthorizedIds.push(docId);
+        failedIds.push(docId);
+        continue;
+      }
+      
+      try {
+        // 執行軟刪除（僅設置 is_deleted = 1，不從 R2 刪除文件）
+        await env.DATABASE.prepare(
+          `UPDATE InternalDocuments SET is_deleted = 1, updated_at = ? WHERE document_id = ?`
+        ).bind(updatedAt, docId).run();
+        
+        successIds.push(docId);
+      } catch (err) {
+        console.error(`[BatchDeleteDocuments] Failed to delete document ${docId}:`, err);
+        failedIds.push(docId);
+      }
+    }
+    
+    // 如果所有資源都無權限或不存在，返回錯誤
+    if (successIds.length === 0) {
+      if (unauthorizedIds.length > 0 && notFoundIds.length === 0) {
+        return errorResponse(403, "FORBIDDEN", 
+          `無權限刪除以下文檔: ${unauthorizedIds.join(', ')}`, null, requestId);
+      } else if (notFoundIds.length > 0 && unauthorizedIds.length === 0) {
+        return errorResponse(404, "NOT_FOUND", 
+          `以下文檔不存在: ${notFoundIds.join(', ')}`, null, requestId);
+      } else {
+        const allFailed = [...unauthorizedIds, ...notFoundIds];
+        return errorResponse(403, "FORBIDDEN", 
+          `無權限刪除或文檔不存在: ${allFailed.join(', ')}`, null, requestId);
+      }
+    }
+    
+    // 清除文檔列表的 KV 緩存
+    await deleteKVCacheByPrefix(env, 'documents_list').catch(() => {});
+    
+    // 構建響應數據
+    const responseData = {
+      success_count: successIds.length,
+      failed_count: failedIds.length,
+      success_ids: successIds,
+      failed_ids: failedIds.length > 0 ? failedIds : undefined,
+    };
+    
+    // 如果有失敗的，添加詳細信息
+    if (unauthorizedIds.length > 0) {
+      responseData.unauthorized_ids = unauthorizedIds;
+    }
+    if (notFoundIds.length > 0) {
+      responseData.not_found_ids = notFoundIds;
+    }
+    
+    // 構建消息
+    let message = `已成功刪除 ${successIds.length} 筆文檔`;
+    if (failedIds.length > 0) {
+      message += `，${failedIds.length} 筆失敗`;
+    }
+    
+    return successResponse(responseData, message, requestId);
+    
+  } catch (err) {
+    console.error('[BatchDeleteDocuments] Error:', err);
+    return errorResponse(500, "INTERNAL_ERROR", 
+      `批量刪除處理失敗: ${err?.message || err}`, null, requestId);
+  }
 }
 
 /**
@@ -612,5 +906,196 @@ export async function handleDownloadDocument(request, env, ctx, requestId, match
   } catch (err) {
     console.error(`[Documents Download] Error:`, err);
     return errorResponse(500, "DOWNLOAD_ERROR", "下載失敗", null, requestId);
+  }
+}
+
+/**
+ * 生成預覽 URL
+ * 用於 Office 文件等需要公開 URL 的預覽場景
+ */
+export async function handleGetPreviewUrl(request, env, ctx, requestId, match, url) {
+  const user = ctx?.user;
+  const docId = match[1];
+  
+  try {
+    // 獲取文檔信息
+    const doc = await env.DATABASE.prepare(`
+      SELECT document_id, file_url, file_name, file_type, uploaded_by
+      FROM InternalDocuments
+      WHERE document_id = ? AND is_deleted = 0
+    `).bind(docId).first();
+    
+    if (!doc) {
+      return errorResponse(404, "NOT_FOUND", "文檔不存在", null, requestId);
+    }
+    
+    // 權限檢查：所有登入用戶都可以生成預覽 URL
+    if (!user) {
+      return errorResponse(401, "UNAUTHORIZED", "未授權", null, requestId);
+    }
+    
+    // 檢查 R2 是否配置
+    if (!env.R2_BUCKET) {
+      return errorResponse(500, "CONFIG_ERROR", "R2 存储未配置", null, requestId);
+    }
+    
+    // 檢查文件是否存在於 R2（使用 get 方法檢查）
+    const object = await env.R2_BUCKET.get(doc.file_url);
+    if (!object) {
+      return errorResponse(404, "FILE_NOT_FOUND", "文件不存在於存儲中", null, requestId);
+    }
+    
+    // 生成簽名 URL（過期時間 1 小時）
+    const expiresIn = 3600; // 1 小時
+    const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
+    
+    // 生成簽名 token
+    const secret = String(env.PREVIEW_SIGNING_SECRET || env.UPLOAD_SIGNING_SECRET || "change-me");
+    const payload = {
+      documentId: docId,
+      fileUrl: doc.file_url,
+      userId: String(user.user_id),
+      exp: expiresAt
+    };
+    
+    // 使用與 attachments 相同的簽名邏輯
+    const b64urlEncode = (u8) => {
+      const b64 = btoa(String.fromCharCode(...u8));
+      return b64.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+    };
+    
+    const utf8 = (str) => new TextEncoder().encode(str);
+    
+    const hmacSha256 = async (keyBytes, msgBytes) => {
+      const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      const sig = await crypto.subtle.sign("HMAC", key, msgBytes);
+      return new Uint8Array(sig);
+    };
+    
+    const pBytes = utf8(JSON.stringify(payload));
+    const sig = await hmacSha256(utf8(secret), pBytes);
+    const token = `${b64urlEncode(pBytes)}.${b64urlEncode(sig)}`;
+    
+    // 構建預覽 URL（指向 Worker 的預覽代理端點）
+    const previewUrl = `${url.origin}/api/v2/documents/${docId}/preview?token=${token}`;
+    
+    return successResponse({
+      previewUrl,
+      expiresAt,
+      expiresIn
+    }, "預覽 URL 生成成功", requestId);
+    
+  } catch (err) {
+    console.error(`[Documents Preview URL] Error:`, err);
+    return errorResponse(500, "PREVIEW_URL_ERROR", "生成預覽 URL 失敗", null, requestId);
+  }
+}
+
+/**
+ * 預覽文件代理端點
+ * 驗證簽名並從 R2 返回文件內容
+ * 注意：此端點不需要用戶認證，簽名驗證即為認證
+ */
+export async function handlePreviewDocument(request, env, ctx, requestId, match, url) {
+  const docId = match[1];
+  const token = url.searchParams.get("token") || "";
+  
+  try {
+    // 驗證 token
+    const parts = token.split(".");
+    if (parts.length !== 2) {
+      return errorResponse(400, "BAD_REQUEST", "簽名無效", null, requestId);
+    }
+    
+    const secret = String(env.PREVIEW_SIGNING_SECRET || env.UPLOAD_SIGNING_SECRET || "change-me");
+    
+    const b64urlDecode = (str) => {
+      const b64 = str.replaceAll("-", "+").replaceAll("_", "/");
+      const pad = (4 - (b64.length % 4)) % 4;
+      const padded = b64 + "=".repeat(pad);
+      return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+    };
+    
+    const utf8 = (str) => new TextEncoder().encode(str);
+    
+    const hmacSha256 = async (keyBytes, msgBytes) => {
+      const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      const sig = await crypto.subtle.sign("HMAC", key, msgBytes);
+      return new Uint8Array(sig);
+    };
+    
+    const b64urlEncode = (u8) => {
+      const b64 = btoa(String.fromCharCode(...u8));
+      return b64.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+    };
+    
+    const payloadBytes = b64urlDecode(parts[0]);
+    const sigBytes = b64urlDecode(parts[1]);
+    
+    // 驗證簽名
+    const expectedSig = await hmacSha256(utf8(secret), payloadBytes);
+    const expectedSigB64 = b64urlEncode(expectedSig);
+    
+    if (parts[1] !== expectedSigB64) {
+      return errorResponse(400, "BAD_REQUEST", "簽名驗證失敗", null, requestId);
+    }
+    
+    // 解析 payload
+    const payload = JSON.parse(new TextDecoder().decode(payloadBytes));
+    
+    // 檢查過期時間
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < now) {
+      return errorResponse(400, "BAD_REQUEST", "預覽 URL 已過期", null, requestId);
+    }
+    
+    // 驗證文檔 ID 匹配
+    if (String(payload.documentId) !== String(docId)) {
+      return errorResponse(400, "BAD_REQUEST", "文檔 ID 不匹配", null, requestId);
+    }
+    
+    // 獲取文檔信息
+    const doc = await env.DATABASE.prepare(`
+      SELECT file_url, file_name, file_type
+      FROM InternalDocuments
+      WHERE document_id = ? AND is_deleted = 0
+    `).bind(docId).first();
+    
+    if (!doc) {
+      return errorResponse(404, "NOT_FOUND", "文檔不存在", null, requestId);
+    }
+    
+    // 驗證 file_url 匹配
+    if (doc.file_url !== payload.fileUrl) {
+      return errorResponse(400, "BAD_REQUEST", "文件 URL 不匹配", null, requestId);
+    }
+    
+    // 檢查 R2 是否配置
+    if (!env.R2_BUCKET) {
+      return errorResponse(500, "CONFIG_ERROR", "R2 存储未配置", null, requestId);
+    }
+    
+    // 從 R2 獲取文件
+    const object = await env.R2_BUCKET.get(doc.file_url);
+    
+    if (!object) {
+      return errorResponse(404, "FILE_NOT_FOUND", "文件不存在於存儲中", null, requestId);
+    }
+    
+    // 返回文件（用於預覽，不設置 attachment）
+    return new Response(object.body, {
+      headers: {
+        'Content-Type': doc.file_type || 'application/octet-stream',
+        'Content-Disposition': `inline; filename="${encodeURIComponent(doc.file_name)}"`,
+        'Cache-Control': 'private, max-age=3600',
+        'Access-Control-Allow-Origin': '*', // 允許 Google Docs Viewer 等外部服務訪問
+        'Access-Control-Allow-Methods': 'GET',
+        'Access-Control-Allow-Headers': 'Range'
+      }
+    });
+    
+  } catch (err) {
+    console.error(`[Documents Preview] Error:`, err);
+    return errorResponse(500, "PREVIEW_ERROR", "預覽失敗", null, requestId);
   }
 }

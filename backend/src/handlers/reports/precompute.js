@@ -27,27 +27,25 @@ function createDummyRequest(url) {
 }
 
 async function computeMonthlyCaches(env, ctx, year, month) {
-  const period = formatMonth(year, month);
-
   try {
     const revenueData = await computeMonthlyRevenue(env, year, month);
-    await setReportCache(env, "monthly-revenue", period, revenueData);
+    await setReportCache(env, "monthly-revenue", year, revenueData, month);
   } catch (err) {
-    console.error("[ReportPrecompute] 月度收款緩存失敗:", period, err);
+    console.error("[ReportPrecompute] 月度收款緩存失敗:", year, month, err);
   }
 
   try {
     const payrollData = await computeMonthlyPayroll(env, year, month);
-    await setReportCache(env, "monthly-payroll", period, payrollData);
+    await setReportCache(env, "monthly-payroll", year, payrollData, month);
   } catch (err) {
-    console.error("[ReportPrecompute] 月度薪資緩存失敗:", period, err);
+    console.error("[ReportPrecompute] 月度薪資緩存失敗:", year, month, err);
   }
 
   try {
     const performanceData = await computeMonthlyEmployeePerformance(env, year, month);
-    await setReportCache(env, "monthly-employee-performance", period, performanceData);
+    await setReportCache(env, "monthly-employee-performance", year, performanceData, month);
   } catch (err) {
-    console.error("[ReportPrecompute] 月度員工產值緩存失敗:", period, err);
+    console.error("[ReportPrecompute] 月度員工產值緩存失敗:", year, month, err);
   }
 
   try {
@@ -63,39 +61,37 @@ async function computeMonthlyCaches(env, ctx, year, month) {
       year,
       month
     );
-    await setReportCache(env, "monthly-client-profitability", period, profitData);
+    await setReportCache(env, "monthly-client-profitability", year, profitData, month);
   } catch (err) {
-    console.error("[ReportPrecompute] 月度客戶毛利緩存失敗:", period, err);
+    console.error("[ReportPrecompute] 月度客戶毛利緩存失敗:", year, month, err);
   }
 }
 
 async function computeAnnualCaches(env, ctx, year) {
-  const period = String(year);
-
   try {
     const revenueData = await computeAnnualRevenue(env, year);
-    await setReportCache(env, "annual-revenue", period, revenueData);
+    await setReportCache(env, "annual-revenue", year, revenueData, null, true);
   } catch (err) {
     console.error("[ReportPrecompute] 年度收款緩存失敗:", year, err);
   }
 
   try {
     const payrollData = await computeAnnualPayroll(env, year);
-    await setReportCache(env, "annual-payroll", period, payrollData);
+    await setReportCache(env, "annual-payroll", year, payrollData, null, true);
   } catch (err) {
     console.error("[ReportPrecompute] 年度薪資緩存失敗:", year, err);
   }
 
   try {
     const performanceData = await computeAnnualEmployeePerformance(env, year);
-    await setReportCache(env, "annual-employee-performance", period, performanceData);
+    await setReportCache(env, "annual-employee-performance", year, performanceData, null, true);
   } catch (err) {
     console.error("[ReportPrecompute] 年度員工產值緩存失敗:", year, err);
   }
 
   try {
     const profitData = await computeAnnualClientProfitability(env, year);
-    await setReportCache(env, "annual-client-profitability", period, profitData);
+    await setReportCache(env, "annual-client-profitability", year, profitData, null, true);
   } catch (err) {
     console.error("[ReportPrecompute] 年度客戶毛利緩存失敗:", year, err);
   }

@@ -43,3 +43,9 @@ CREATE INDEX IF NOT EXISTS idx_ds_client_id_position ON DirectorsSupervisors(cli
 -- 建議在後端程式於讀取時做一次性落庫，或提供一次性遷移腳本。
 
 
+
+
+
+
+
+

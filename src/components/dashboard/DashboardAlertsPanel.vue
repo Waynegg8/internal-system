@@ -47,7 +47,7 @@
           class="alerts-card"
           :loading="loading"
           title="即時提醒"
-          :extra="alertsExtra"
+          :extra="alertsExtraWithNotifications"
         >
           <a-list
             v-if="alerts && alerts.length"
@@ -64,8 +64,14 @@
 </template>
 
 <script setup>
-import { computed, h, resolveComponent } from 'vue'
+import { computed, h, resolveComponent, ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { BellOutlined } from '@ant-design/icons-vue'
 import { formatDate, formatDateTime } from '@/utils/formatters'
+import { useNotificationsApi } from '@/api/notifications'
+
+const router = useRouter()
+const notificationsApi = useNotificationsApi()
 
 const props = defineProps({
   alerts: {
@@ -84,6 +90,45 @@ const props = defineProps({
 
 const AListItem = resolveComponent('a-list-item')
 
+// 未讀通知數量
+const unreadNotificationCount = ref(0)
+const loadingNotifications = ref(false)
+
+// 載入未讀通知數量
+const loadUnreadCount = async () => {
+  try {
+    loadingNotifications.value = true
+    const count = await notificationsApi.fetchUnreadCount()
+    unreadNotificationCount.value = count
+  } catch (error) {
+    console.error('[DashboardAlertsPanel] 載入未讀通知數量失敗:', error)
+  } finally {
+    loadingNotifications.value = false
+  }
+}
+
+// 跳轉到通知列表
+const handleViewNotifications = () => {
+  router.push('/notifications')
+}
+
+// 定時刷新未讀數量（每30秒）
+let refreshTimer = null
+
+onMounted(() => {
+  loadUnreadCount()
+  // 每30秒刷新一次未讀數量
+  refreshTimer = setInterval(() => {
+    loadUnreadCount()
+  }, 30000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+  }
+})
+
 const hasSummary = computed(() => {
   return props.dailySummary && props.dailySummary.stats
 })
@@ -100,6 +145,64 @@ const alertsExtra = computed(() => {
   if (!latest) return null
   const text = `最近更新 ${formatDateTime(latest)}`
   return h('span', { class: 'summary-extra' }, text)
+})
+
+const alertsExtraWithNotifications = computed(() => {
+  const elements = []
+  
+  // 未讀通知數量 Badge
+  if (unreadNotificationCount.value > 0) {
+    elements.push(
+      h(
+        'a-badge',
+        {
+          count: unreadNotificationCount.value,
+          overflowCount: 99,
+          style: { marginRight: '8px' }
+        },
+        {
+          default: () =>
+            h(
+              'a-button',
+              {
+                type: 'link',
+                size: 'small',
+                icon: h(BellOutlined),
+                onClick: handleViewNotifications,
+                style: { padding: '0 4px' }
+              },
+              { default: () => '通知' }
+            )
+        }
+      )
+    )
+  } else {
+    elements.push(
+      h(
+        'a-button',
+        {
+          type: 'link',
+          size: 'small',
+          icon: h(BellOutlined),
+          onClick: handleViewNotifications,
+          style: { padding: '0 4px', marginRight: '8px' }
+        },
+        { default: () => '通知' }
+      )
+    )
+  }
+  
+  // 原有時間信息
+  if (props.alerts?.length) {
+    const latest = props.alerts[0]?.createdAt
+    if (latest) {
+      elements.push(
+        h('span', { class: 'summary-extra' }, `最近更新 ${formatDateTime(latest)}`)
+      )
+    }
+  }
+  
+  return elements.length > 0 ? h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, elements) : null
 })
 
 const displayedSummaryItems = computed(() => {

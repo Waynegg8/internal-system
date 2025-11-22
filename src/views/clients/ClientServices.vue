@@ -345,8 +345,8 @@ const handleExecuteOnceOk = async () => {
     await createBillingSchedule(payload)
     showSuccess('一次性服務已執行並建立收費')
     isExecuteOnceVisible.value = false
-    // 刷新詳情（年總額等）
-    await clientStore.fetchClientDetail(route.params.id)
+    // 刷新詳情（年總額等）- 強制刷新以獲取最新數據
+    await clientStore.fetchClientDetail(route.params.id, { forceRefresh: true })
   } catch (error) {
     console.error('執行一次性服務失敗:', error)
     showError(error.message || '執行一次性服務失敗')
@@ -477,7 +477,8 @@ const handleModalOk = async () => {
     }
     
     isModalVisible.value = false
-    await clientStore.fetchClientDetail(clientId)
+    // 強制刷新以獲取最新服務列表
+    await clientStore.fetchClientDetail(clientId, { forceRefresh: true })
   } catch (error) {
     console.error('操作失敗:', error)
     showError(error.message || '操作失敗')
@@ -502,7 +503,8 @@ const handleDelete = async (clientServiceId) => {
     const clientId = route.params.id
     await deleteClientService(clientId, clientServiceId)
     showSuccess('服務已刪除')
-    await clientStore.fetchClientDetail(clientId)
+    // 強制刷新以獲取最新服務列表
+    await clientStore.fetchClientDetail(clientId, { forceRefresh: true })
   } catch (error) {
     console.error('刪除失敗:', error)
     showError(error.message || '刪除失敗')
@@ -510,26 +512,17 @@ const handleDelete = async (clientServiceId) => {
 }
 
 onMounted(async () => {
-  // 確保客戶詳情已加載
+  // 確保客戶詳情已加載（使用 skipCache 避免重複請求，但允許重用進行中的請求）
   const clientId = route.params.id
-  if (!currentClient.value || currentClient.value.clientId !== clientId) {
-    await clientStore.fetchClientDetail(clientId)
+  const isLoaded = clientStore.isCurrentClientLoaded(clientId)
+  
+  if (!isLoaded) {
+    await clientStore.fetchClientDetail(clientId, { skipCache: true })
   }
-  // 保險：若該客戶目前沒有任何服務，嘗試自動建立一筆一次性服務（使用 service_name 自動建系統服務）
-  try {
-    const hasServices = Array.isArray(currentClient.value?.services) && currentClient.value.services.length > 0
-    if (!hasServices) {
-      await createClientService(clientId, {
-        service_name: `臨時服務-${Date.now()}`,
-        service_type: 'one-time',
-        status: 'active'
-      })
-      await clientStore.fetchClientDetail(clientId)
-    }
-  } catch (e) {
-    // 忽略失敗，避免阻塞畫面
-    console.warn('Auto-create fallback service failed:', e)
-  }
+  
+  // 移除自動建立服務的邏輯，這會導致不必要的 API 調用和數據變更
+  // 如果客戶沒有服務，應該由用戶手動添加，而不是自動創建
+  
   await loadAllServices()
 })
 </script>

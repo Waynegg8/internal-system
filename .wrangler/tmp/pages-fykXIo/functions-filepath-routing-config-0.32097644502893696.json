@@ -1,0 +1,21 @@
+{
+  "routes": [
+    {
+      "routePath": "/api/v2/:path*",
+      "mountPath": "/api/v2",
+      "method": "",
+      "module": [
+        "api/v2/[[path]].js:onRequest"
+      ]
+    },
+    {
+      "routePath": "/",
+      "mountPath": "/",
+      "method": "",
+      "middleware": [
+        "_middleware.js:onRequest"
+      ]
+    }
+  ],
+  "baseURL": "/"
+}

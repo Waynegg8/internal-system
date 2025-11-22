@@ -4,6 +4,9 @@
 
 import { successResponse, errorResponse } from "../../utils/response.js";
 import { calculateEmployeePayroll } from "../../utils/payroll-calculator.js";
+import { getReportCache, setReportCache, deleteReportCache } from "../../utils/report-cache.js";
+
+const REPORT_TYPE = "annual-payroll";
 
 function formatMonth(year, month) {
   return `${year}-${String(month).padStart(2, "0")}`;
@@ -172,8 +175,26 @@ export async function handleAnnualPayroll(request, env, ctx, requestId, url) {
       return errorResponse(422, "VALIDATION_ERROR", "請選擇查詢年度", null, requestId);
     }
 
+    const forceRefresh = params.get("refresh") === "1";
+
+    const cached = await getReportCache(env, REPORT_TYPE, year, null, true);
+
+    if (!forceRefresh && cached?.data) {
+      return successResponse(cached.data, "查詢成功", requestId, {
+        cacheHit: true,
+        cachedAt: cached.computedAt || null,
+      });
+    } else {
+      await deleteReportCache(env, REPORT_TYPE, year, null, true).catch(() => {});
+    }
+
     const data = await computeAnnualPayroll(env, year);
-    return successResponse(data, "查詢成功", requestId);
+    await setReportCache(env, REPORT_TYPE, year, data, null, true);
+
+    return successResponse(data, "查詢成功", requestId, {
+      cacheHit: false,
+      refreshed: forceRefresh,
+    });
   } catch (err) {
     console.error(`[AnnualPayroll] Error:`, err);
     return errorResponse(500, "INTERNAL_ERROR", "伺服器錯誤", null, requestId);

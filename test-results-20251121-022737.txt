@@ -1,0 +1,56 @@
+
+Running 21 tests using 1 worker
+
+(node:24448) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24448) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+BR2.5 皜祈岫?豢?閮剔蔭摰?: {
+  testClients: [
+    {
+      clientId: [32m'0063265785'[39m,
+      companyName: [32m'BR2.5皜祈岫摰Ｘ???砍-1763663265785'[39m,
+      taxId: [32m'63265785'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m448[39m,
+      clientId: [32m'0063265785'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'撟游漲蝔??喳??'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m320[39m,
+      clientServiceId: [33m448[39m,
+      taskName: [32m'BR2.5皜祈岫隞餃?-???遢????[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m321[39m,
+      clientServiceId: [33m448[39m,
+      taskName: [32m'BR2.5皜祈岫隞餃?-?????敺?憭?[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m322[39m,
+      clientServiceId: [33m448[39m,
+      taskName: [32m'BR2.5皜祈岫隞餃?-?箏???'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+  ok  1 [chromium] ??tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:79:5 ??BR2.5: 隞餃??芸??? - 摰皜祈岫憟辣 ??BR2.5.1: 隞餃??芸????摩 ??蝞∠??⊥?閰脰憭??孛?潔遙????(30.5s)
+  ok  2 [chromium] ??tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:97:5 ??BR2.5: 隞餃??芸??? - 摰皜祈岫憟辣 ??BR2.5.1: 隞餃??芸????摩 ??蝟餌絞?府瑼Ｘ隞餃??臬撌脣??剁??踹?????嚗?(54.1s)
+  ok  3 [chromium] ??tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:125:5 ??BR2.5: 隞餃??芸??? - 摰皜祈岫憟辣 ??BR2.5.1: 隞餃??芸????摩 ??蝟餌絞?府閮?隞餃???甇瑕 (29.2s)

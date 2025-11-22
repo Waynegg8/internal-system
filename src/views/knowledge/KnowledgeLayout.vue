@@ -329,7 +329,10 @@ const debouncedSearch = debounce(() => {
 // 方法
 const handleTabChange = (key) => {
   activeTab.value = key
-  router.push(`/knowledge/${key}`)
+  // 保留現有的查詢參數（如 taskId, returnTo）
+  const query = { ...route.query }
+  query.tab = key
+  router.push({ path: `/knowledge/${key}`, query })
 }
 
 const handleSearchInput = () => {
@@ -365,17 +368,17 @@ const handleSearch = async () => {
         console.log('fetchDocuments 完成')
         break
       case 'attachments':
-        // 附件使用不同的篩選條件
-        console.log('設置附件篩選條件...')
+        // 附件系統專為任務服務，只使用關鍵字篩選
+        // 任務篩選通過 URL 參數 taskId 自動設置，不需要用戶手動選擇
         const currentFilters = filters.value || { q: '', category: '', scope: '', client: '', tags: [] }
-        knowledgeStore.setAttachmentFilters({
-          q: currentFilters.q || '',
-          client: currentFilters.client || '',
-          type: currentFilters.category || ''
-        })
-        console.log('調用 fetchAttachments...')
-        await knowledgeStore.fetchAttachments()
-        console.log('fetchAttachments 完成')
+        const attachmentFilters = knowledgeStore.attachmentFilters || {}
+        // 只在沒有任務篩選時才響應全局關鍵字篩選
+        if (!attachmentFilters.taskId) {
+          knowledgeStore.setAttachmentFilters({
+            q: currentFilters.q || ''
+          })
+          await knowledgeStore.fetchAttachments()
+        }
         break
     }
     console.log('數據載入完成')
@@ -403,14 +406,17 @@ const handleFilterChange = async () => {
         await knowledgeStore.fetchDocuments()
         break
       case 'attachments':
-        // 附件使用不同的篩選條件
+        // 附件系統專為任務服務，只使用關鍵字篩選
+        // 任務篩選通過 URL 參數 taskId 自動設置，不需要用戶手動選擇
         const currentFiltersForAttachments = filters.value || { q: '', category: '', scope: '', client: '', tags: [] }
-        knowledgeStore.setAttachmentFilters({
-          q: currentFiltersForAttachments.q || '',
-          client: currentFiltersForAttachments.client || '',
-          type: currentFiltersForAttachments.category || ''
-        })
-        await knowledgeStore.fetchAttachments()
+        // 只在沒有任務篩選時才響應全局關鍵字篩選
+        const attachmentFilters = knowledgeStore.attachmentFilters || {}
+        if (!attachmentFilters.taskId) {
+          knowledgeStore.setAttachmentFilters({
+            q: currentFiltersForAttachments.q || ''
+          })
+          await knowledgeStore.fetchAttachments()
+        }
         break
     }
   } catch (error) {
@@ -459,8 +465,9 @@ const handleAddNew = () => {
       addDocumentTrigger.value++
     },
     attachments: () => {
-      // 觸發附件上傳抽屜
-      addAttachmentTrigger.value++
+      // 附件系統專為任務服務，不提供獨立上傳功能
+      // 用戶必須從任務詳情頁上傳附件
+      // 這裡可以顯示提示或不做任何操作
     }
   }
   
@@ -556,7 +563,11 @@ onMounted(async () => {
   // 根據路由設置活動標籤
   const pathSegments = route.path.split('/')
   const tabFromPath = pathSegments[2]
-  if (tabFromPath && ['sop', 'faq', 'resources', 'attachments'].includes(tabFromPath)) {
+  // 如果有 tab 查詢參數，優先使用查詢參數
+  const tabFromQuery = route.query.tab
+  if (tabFromQuery && ['sop', 'faq', 'resources', 'attachments'].includes(tabFromQuery)) {
+    activeTab.value = tabFromQuery
+  } else if (tabFromPath && ['sop', 'faq', 'resources', 'attachments'].includes(tabFromPath)) {
     activeTab.value = tabFromPath
   }
 
@@ -585,9 +596,12 @@ onUnmounted(() => {
 .knowledge-layout {
   padding: 4px;
   background: #f5f5f5;
-  min-height: calc(100vh - 64px);
-  display: flex;
-  flex-direction: column;
+  min-height: calc(100vh - 64px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+  /* 允許頁面內容超過視口高度，以便預覽區域可以達到 1000px 以上 */
 }
 
 .tabs-container {
@@ -930,12 +944,22 @@ onUnmounted(() => {
 .content-container {
   background: #fff;
   border-radius: 4px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  min-height: 0;
-  overflow: hidden;
+  min-height: 0 !important;
+  /* 移除 overflow: hidden，允許內容超過視口高度 */
+  /* 移除 height: 100%，使用 min-height 讓內容自然延伸 */
+  min-height: calc(100vh - 220px) !important; /* 確保至少有足夠的高度用於預覽 */
+}
+
+/* 針對資源中心和附件頁面，與 SOP 頁面保持一致，使用 flex: 1 填充可用空間 */
+.content-container:has(.knowledge-resources-content),
+.content-container:has(.knowledge-attachments-content) {
+  /* 移除固定高度限制，使用 flex: 1 填充可用空間 */
+  /* height: calc(100vh - var(--knowledge-viewport-offset, 220px)) !important; */
+  /* flex: none !important; */
 }
 
 :root {
@@ -943,14 +967,20 @@ onUnmounted(() => {
   --knowledge-iframe-offset: 260px;
 }
 
-/* 針對資源中心和附件頁面使用固定視窗高度布局（雙欄預覽布局） */
+/* 確保 CSS 變數在整個應用中可用 */
+.knowledge-layout {
+  --knowledge-viewport-offset: 220px;
+  --knowledge-iframe-offset: 260px;
+}
+
+/* 針對資源中心和附件頁面，與 SOP 頁面保持一致，使用 height: 100% 填充容器 */
 .content-container :deep(.knowledge-resources-content),
 .content-container :deep(.knowledge-attachments-content) {
-  height: calc(100vh - var(--knowledge-viewport-offset)); /* 固定高度填滿視窗 */
-  display: flex;
-  flex-direction: column;
-  padding: 12px;
-  overflow: hidden; /* 防止整體滾動 */
+  height: 100% !important; /* 與 SOP 頁面一致，使用 100% 填充容器 */
+  display: flex !important;
+  flex-direction: column !important;
+  /* padding: 12px !important; 移除，由組件內部設置 */
+  overflow: hidden !important; /* 防止整體滾動 */
 }
 
 /* 確保 a-row 填滿可用空間 */
@@ -960,25 +990,37 @@ onUnmounted(() => {
   gap: 12px;
   margin: 0 !important;
   flex-wrap: nowrap;
-  align-items: flex-start;
+  align-items: stretch !important;
 }
 
 /* 確保 a-col 正確處理高度和溢出 */
 .content-container :deep(.knowledge-resources-content .ant-col),
 .content-container :deep(.knowledge-attachments-content .ant-col) {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 0 !important;
   padding-left: 4px !important;
   padding-right: 4px !important;
+  height: 100% !important;
+  align-self: stretch !important;
+}
+
+/* 確保 row 使用 flex: 1 填滿可用空間 */
+.content-container :deep(.knowledge-resources-content .resources-row),
+.content-container :deep(.knowledge-attachments-content .attachments-row) {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
 }
 
 /* 確保 Card 填滿 Col 的高度 */
 .content-container :deep(.knowledge-resources-content .ant-card),
 .content-container :deep(.knowledge-attachments-content .ant-card) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  height: 100% !important;
+  flex: 1 1 auto !important;
 }
 
 /* Card Body 基礎設置 */
@@ -999,10 +1041,73 @@ onUnmounted(() => {
 /* 預覽列 - 內容可滾動，查看完整 PDF */
 .content-container :deep(.document-preview-col .ant-card-body),
 .content-container :deep(.attachment-preview-col .ant-card-body) {
-  overflow-y: auto; /* 允許滾動查看大型 PDF */
-  overflow-x: hidden;
-  padding: 0; /* 移除 padding，讓預覽組件完全填充 */
+  overflow: hidden !important; /* 預覽組件內部處理滾動 */
+  overflow-x: hidden !important;
+  padding: 0 !important; /* 移除 padding，讓預覽組件完全填充 */
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 1000px !important; /* 確保預覽列至少有 1000px 高度 */
+  height: 100% !important; /* 確保填滿 Card 的高度 */
+}
+
+/* 直接強制預覽組件高度 - 使用全局選擇器避免 scoped CSS 問題 */
+.content-container :deep(.attachment-preview-wrapper .document-preview),
+.content-container :deep(.attachment-preview-wrapper .attachment-preview) {
+  min-height: 1000px !important;
+  height: 100% !important;
+  padding: 0 !important;
+  flex: 1 !important;
+}
+
+.content-container :deep(.attachment-preview-wrapper .document-preview .ant-spin-container),
+.content-container :deep(.attachment-preview-wrapper .document-preview .ant-spin-nested-loading),
+.content-container :deep(.attachment-preview-wrapper .attachment-preview .ant-spin-container),
+.content-container :deep(.attachment-preview-wrapper .attachment-preview .ant-spin-nested-loading) {
+  min-height: 1000px !important;
+  height: 100% !important;
+  flex: 1 !important;
+}
+
+.content-container :deep(.attachment-preview-wrapper .document-preview .preview-container),
+.content-container :deep(.attachment-preview-wrapper .attachment-preview .preview-container) {
+  min-height: 1000px !important;
+  height: 100% !important;
+  flex: 1 !important;
 }
 
 /* 桌面專用設計 - 移除響應式 */
+</style>
+
+<!-- 非 scoped 全局樣式，直接覆蓋預覽組件的 scoped CSS -->
+<style>
+/* 強制預覽組件高度為 1000px - 使用全局選擇器，不依賴 scoped CSS hash */
+.knowledge-layout .attachment-preview-wrapper .document-preview,
+.knowledge-layout .attachment-preview-wrapper .attachment-preview {
+  min-height: 1000px !important;
+  height: 100% !important;
+  padding: 0 !important;
+  flex: 1 !important;
+}
+
+.knowledge-layout .attachment-preview-wrapper .document-preview .ant-spin-container,
+.knowledge-layout .attachment-preview-wrapper .document-preview .ant-spin-nested-loading,
+.knowledge-layout .attachment-preview-wrapper .attachment-preview .ant-spin-container,
+.knowledge-layout .attachment-preview-wrapper .attachment-preview .ant-spin-nested-loading {
+  min-height: 1000px !important;
+  height: 100% !important;
+  flex: 1 !important;
+}
+
+.knowledge-layout .attachment-preview-wrapper .document-preview .preview-container,
+.knowledge-layout .attachment-preview-wrapper .attachment-preview .preview-container {
+  min-height: 1000px !important;
+  height: 100% !important;
+  flex: 1 !important;
+}
+
+.knowledge-layout .attachment-preview-wrapper .document-preview .preview-iframe {
+  min-height: 1000px !important;
+  height: 100% !important;
+}
 </style>

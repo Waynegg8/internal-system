@@ -4,6 +4,7 @@
 
 import { successResponse, errorResponse } from "../../utils/response.js";
 import { WORK_TYPES, calculateWeightedHours, getDateType, validateWorkTypeForDateType } from "./utils.js";
+import { invalidateCacheByDataType, extractYearFromDate } from "../../utils/cache-invalidation.js";
 
 /**
  * 获取工时记录列表
@@ -613,17 +614,26 @@ export async function handleCreateOrUpdateTimesheet(request, env, ctx, requestId
   const { triggerPayrollRecalculation } = await import("../../utils/payroll-recalculate.js");
   const triggerPayrollPromise = triggerPayrollRecalculation(env, user.user_id, work_date, ctx, 'overtime').catch(() => {});
   
+  // 失效相關年度報表快取
+  const year = extractYearFromDate(work_date);
+  const invalidateReportCachePromise = year
+    ? invalidateCacheByDataType(env, "timesheets", year).catch((err) => {
+        console.warn("[Timesheets] 失效年度報表快取失敗:", err);
+      })
+    : Promise.resolve();
+
   // 使用 waitUntil 確保異步任務完成（但不阻塞響應）
   if (ctx?.waitUntil) {
     ctx.waitUntil(Promise.all([
       clearWeekCachePromise,
       clearDashboardCachePromise,
-      triggerPayrollPromise
+      triggerPayrollPromise,
+      invalidateReportCachePromise
     ]).catch(() => {}));
   } else {
     // 如果沒有 waitUntil（測試環境），等待完成但不阻塞太久
     await Promise.race([
-      Promise.all([clearWeekCachePromise, clearDashboardCachePromise, triggerPayrollPromise]),
+      Promise.all([clearWeekCachePromise, clearDashboardCachePromise, triggerPayrollPromise, invalidateReportCachePromise]),
       new Promise(resolve => setTimeout(resolve, 5000))  // 最多等待 5 秒
     ]).catch(() => {});
   }
@@ -683,17 +693,26 @@ export async function handleDeleteTimesheet(request, env, ctx, requestId, match,
   const { triggerPayrollRecalculation } = await import("../../utils/payroll-recalculate.js");
   const triggerPayrollPromise = triggerPayrollRecalculation(env, existing.user_id, existing.work_date, ctx, 'overtime').catch(() => {});
   
+  // 失效相關年度報表快取
+  const year = extractYearFromDate(existing.work_date);
+  const invalidateReportCachePromise = year
+    ? invalidateCacheByDataType(env, "timesheets", year).catch((err) => {
+        console.warn("[Timesheets] 失效年度報表快取失敗:", err);
+      })
+    : Promise.resolve();
+
   // 使用 waitUntil 確保異步任務完成（但不阻塞響應）
   if (ctx?.waitUntil) {
     ctx.waitUntil(Promise.all([
       clearWeekCachePromise,
       clearDashboardCachePromise,
-      triggerPayrollPromise
+      triggerPayrollPromise,
+      invalidateReportCachePromise
     ]).catch(() => {}));
   } else {
     // 如果沒有 waitUntil（測試環境），等待完成但不阻塞太久
     await Promise.race([
-      Promise.all([clearWeekCachePromise, clearDashboardCachePromise, triggerPayrollPromise]),
+      Promise.all([clearWeekCachePromise, clearDashboardCachePromise, triggerPayrollPromise, invalidateReportCachePromise]),
       new Promise(resolve => setTimeout(resolve, 5000))  // 最多等待 5 秒
     ]).catch(() => {});
   }

@@ -57,11 +57,11 @@ watch(collapsed, (val) => {
   box-shadow: var(--shadow-card);
   border-radius: var(--radius-base);
   transition: var(--transition-base);
-  margin-bottom: 16px;
+  margin-bottom: 0; /* 完全移除下邊距 */
 }
 
 .filter-card :deep(.ant-card-body) {
-  padding: 16px;
+  padding: 8px 16px; /* 根據設計：上下 8px，左右 16px */
 }
 
 .filter-card :deep(.ant-card-head) {

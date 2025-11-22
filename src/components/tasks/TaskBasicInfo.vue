@@ -24,7 +24,7 @@
         />
       </a-descriptions-item>
 
-      <a-descriptions-item label="客戶" :span="2">
+      <a-descriptions-item label="客戶">
         <a-button
           v-if="task.client_id || task.clientId"
           type="link"
@@ -33,6 +33,10 @@
           {{ task.client_name || task.clientName || '-' }}
         </a-button>
         <span v-else>-</span>
+      </a-descriptions-item>
+
+      <a-descriptions-item label="服務">
+        {{ task.service_name || task.serviceName || '-' }}
       </a-descriptions-item>
 
       <a-descriptions-item label="前置任務">

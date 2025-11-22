@@ -20,7 +20,21 @@
           placeholder="請輸入成本名稱"
           :maxlength="100"
           show-count
+          @input="handleCostNameChange"
         />
+      </a-form-item>
+
+      <a-form-item label="成本代碼" name="costCode">
+        <a-input
+          v-model:value="formData.costCode"
+          placeholder="系統自動生成"
+          :maxlength="50"
+          show-count
+          :read-only="!isEdit"
+        />
+        <div v-if="!isEdit" class="form-item-extra">
+          系統將根據成本名稱自動生成代碼
+        </div>
       </a-form-item>
       
       <a-form-item label="類別" name="category">
@@ -81,6 +95,7 @@ const loading = ref(false)
 
 // 表單數據
 const formData = ref({
+  costCode: '',
   costName: '',
   category: undefined,
   allocationMethod: undefined,
@@ -99,6 +114,10 @@ const isEdit = computed(() => !!props.editingCostType)
 
 // 表單驗證規則
 const rules = {
+  costCode: [
+    { required: true, message: '請輸入成本代碼', trigger: 'blur' },
+    { max: 50, message: '成本代碼不能超過50個字符', trigger: 'blur' }
+  ],
   costName: [
     { required: true, message: '請輸入成本名稱', trigger: 'blur' },
     { max: 100, message: '成本名稱不能超過100個字符', trigger: 'blur' }
@@ -118,6 +137,7 @@ const rules = {
 watch(() => props.editingCostType, (costType) => {
   if (costType) {
     formData.value = {
+      costCode: costType.costCode || costType.cost_code || costType.code || '',
       costName: costType.costName || costType.cost_name || '',
       category: costType.category || costType.cost_type || undefined,
       allocationMethod: costType.allocationMethod || costType.allocation_method || undefined,
@@ -134,6 +154,7 @@ watch(() => props.visible, (val) => {
       // 編輯模式：填充表單
       const costType = props.editingCostType
       formData.value = {
+        costCode: costType.costCode || costType.cost_code || costType.code || '',
         costName: costType.costName || costType.cost_name || '',
         category: costType.category || costType.cost_type || undefined,
         allocationMethod: costType.allocationMethod || costType.allocation_method || undefined,
@@ -143,6 +164,7 @@ watch(() => props.visible, (val) => {
     } else {
       // 新增模式：重置表單
       formData.value = {
+        costCode: '',
         costName: '',
         category: undefined,
         allocationMethod: undefined,
@@ -163,6 +185,7 @@ const handleSubmit = async () => {
     
     // 構建 payload
     const payload = {
+      cost_code: formData.value.costCode,
       cost_name: formData.value.costName,
       category: formData.value.category,
       allocation_method: formData.value.allocationMethod,
@@ -182,12 +205,30 @@ const handleSubmit = async () => {
   }
 }
 
+// 處理成本名稱變化（自動生成成本代碼）
+const handleCostNameChange = () => {
+  if (!isEdit.value && formData.value.costName) {
+    // 新增模式下自動生成成本代碼
+    // 簡單的自動生成邏輯：將中文轉為拼音或英文，轉大寫
+    const name = formData.value.costName.trim()
+    if (name) {
+      // 簡單的自動生成：取前4個字符，去掉空格，轉大寫
+      const code = name.replace(/\s+/g, '').substring(0, 4).toUpperCase()
+      formData.value.costCode = code
+    }
+  }
+}
+
 // 取消
 const handleCancel = () => {
   modalVisible.value = false
   emit('cancel')
 }
 </script>
+
+
+
+
 
 
 

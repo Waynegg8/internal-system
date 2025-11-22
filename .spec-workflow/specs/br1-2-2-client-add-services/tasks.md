@@ -1,0 +1,173 @@
+# Tasks Document: BR1.2.2: 客戶新增 - 服務設定分頁
+
+## 1.0 Backend API Implementation
+
+- [x] 1.1 客戶服務 API Handler 實現 ✅ 已實現
+- **File**: backend/src/handlers/clients/client-services.js
+- **Functions**: handleClientServices, handleCreateClientService, handleUpdateClientService, handleDeleteClientService
+- **Current Implementation**:
+  - ✅ 支援服務類型選擇（定期/一次性）
+  - ✅ 支援執行頻率設定（execution_months JSON）
+  - ✅ 支援服務類型預設值自動帶入（從Services表讀取default_*欄位）
+  - ✅ 支援是否用於自動生成任務設定
+  - ✅ 軟刪除機制
+  - ✅ 參數化查詢防止SQL注入
+  - ✅ 權限檢查（管理員或客戶負責人）
+- **Requirements**: BR1.2.2.1, BR1.2.2.2, BR1.2.2.3, BR1.2.2.4, BR1.2.2.5, BR1.2.2.6, BR1.2.2.7, BR1.2.2.12
+- **Next Action**: 無需修改，現有實現已滿足需求
+- [x] 1.2 任務配置 API Handler 實現 ✅ 已實現
+- **File**: backend/src/handlers/task-configs/task-config-crud.js
+- **Functions**: handleGetTaskConfigs, handleCreateTaskConfig, handleUpdateTaskConfig, handleDeleteTaskConfig, handleBatchSaveTaskConfigs
+- **Current Implementation**:
+  - ✅ 支援任務配置CRUD操作
+  - ✅ 支援任務生成時間和到期日規則設定
+  - ✅ 支援SOP關聯（TaskConfigSOPs表）
+  - ✅ 支援批量保存任務配置
+  - ✅ 支援固定期限任務設置（is_fixed_deadline）
+  - ✅ 支援執行頻率設定（execution_months, execution_frequency）
+  - ✅ 權限檢查和快取管理
+- **Requirements**: BR1.2.2.9, BR1.2.2.10
+- **Next Action**: 無需修改，現有實現已滿足需求
+- [x] 2.1 核心頁面組件實現 ✅ 已實現
+- **File**: src/views/clients/add/ClientAddServices.vue
+- **Current Implementation**:
+  - ✅ 服務列表展示和管理（新增、編輯、刪除）
+  - ✅ 服務類型選擇（定期/一次性）
+  - ✅ 服務類型預設值自動帶入
+  - ✅ 執行頻率設定（勾選執行月份）
+  - ✅ 是否用於自動生成任務設定
+  - ✅ 收費計劃建立提示
+  - ✅ 獨立保存服務設定
+  - ✅ 檢查客戶基本資訊是否已保存
+  - ✅ 任務配置整合（TaskConfiguration組件）
+- **Requirements**: BR1.2.2.1, BR1.2.2.2, BR1.2.2.3, BR1.2.2.4, BR1.2.2.5, BR1.2.2.6, BR1.2.2.7, BR1.2.2.11, BR1.2.2.12
+- **Next Action**: 無需修改，現有實現已滿足需求
+- [x] 2.2 新增服務模態框組件 ✅ 已實現
+- **File**: src/components/clients/AddServiceModal.vue
+- **Current Implementation**:
+  - ✅ 服務選擇下拉框實現
+  - ✅ 服務類型選擇（定期/一次性）
+  - ✅ 服務類型預設值自動帶入
+  - ✅ 執行頻率設定（勾選執行月份）
+  - ✅ 是否用於自動生成任務設定
+  - ✅ 表單驗證和錯誤處理
+- **Requirements**: BR1.2.2.1, BR1.2.2.4, BR1.2.2.5, BR1.2.2.6, BR1.2.2.7
+- **Next Action**: 無需修改，現有實現已滿足需求
+- [x] 2.3 任務配置組件實現 ✅ 已實現
+- **File**: src/components/clients/TaskConfiguration.vue
+- **Current Implementation**:
+  - ✅ 任務模板套用功能已實現
+  - ✅ 任務生成時間和到期日設置UI（支援簡化規則）
+  - ✅ SOP 選擇和綁定UI（任務層級）
+  - ✅ 批量保存任務配置
+  - ✅ 執行頻率設置和視覺化
+  - ✅ SOP 自動綁定邏輯已修復（autoSelectedServiceSops computed正確返回服務層級SOP IDs）
+  - ✅ 即時預覽功能已整合（TaskGenerationPreview組件已創建並整合）
+  - ✅ 固定期限任務設置UI已完整實現（TaskDueDateRule組件中實現）
+- **Requirements**: BR1.2.2.9, BR1.2.2.10
+- **Next Action**: 無需修改，現有實現已滿足需求
+- [x] 2.4 一次性服務執行功能 ✅ 已實現
+- **File**: src/views/clients/ClientServices.vue
+- **Current Implementation**:
+  - ✅ 「執行服務」按鈕（僅一次性服務顯示）
+  - ✅ 執行對話框（選擇日期、金額、說明、付款期限）
+  - ✅ 整合收費計劃建立（billing-crud.js handleCreateBilling）
+  - ✅ 自動任務生成（一次性服務立即生成任務）
+  - ✅ 年度總額更新
+- **Requirements**: BR1.2.2.8
+- **Next Action**: 無需修改，現有實現已滿足需求
+- [x] 3.1 任務生成預覽組件 ✅ 已實現
+- **File**: src/components/clients/TaskGenerationPreview.vue
+- **Current Implementation**:
+  - ✅ 即時預覽功能已實現
+  - ✅ 支援選擇不同月份進行預覽
+  - ✅ 顯示任務在指定月份的實際生成時間和到期日
+  - ✅ 顯示清晰的描述文字（例如「3月的任務在3月1日生成，到期日是3月15日」）
+  - ✅ 支援固定期限任務標記
+  - ✅ 錯誤狀態顯示和驗證
+  - ✅ 響應式更新（當任務配置變化時自動更新預覽）
+- **Requirements**: BR1.2.2.9, BR1.2.2.10
+- **Next Action**: 無需修改，現有實現已滿足需求
+- [x] 3.2 SOP 選擇器組件 ✅ 已實現
+- **File**: src/components/clients/TaskSOPSelector.vue
+- **Current Implementation**:
+  - ✅ 從知識庫讀取符合條件的 SOP（先篩選服務類型，再篩選層級）
+  - ✅ 支援服務層級 SOP 自動讀取和顯示（只讀模式）
+  - ✅ 支援任務層級 SOP 多選功能
+  - ✅ 支援客戶專屬 SOP 優先顯示和標記
+  - ✅ 支援搜索功能（任務層級 SOP）
+  - ✅ 支援取消預設帶入的 SOP
+  - ✅ 自動過濾符合條件的 SOP（服務類型層級 = 當前服務類型，層級 = 服務層級/任務層級，客戶 = 統一模板或當前客戶）
+  - ✅ 已整合到 TaskConfiguration 組件中使用
+- **Requirements**: BR1.2.2.9, BR1.2.2.10
+- **Next Action**: 無需修改，現有實現已滿足需求
+- **Note**: TaskSOPSelector 組件已實現所有需求功能，雖然設計文檔中提到了 SOPSelector.vue，但 TaskSOPSelector.vue 已經完全滿足了需求並在實際使用中
+- [x] 3.3 收費計劃提示模態框 ✅ 已實現
+- **File**: src/components/clients/CreateBillingPromptModal.vue
+- **Requirements**: BR1.2.2.11
+- **Next Action**: 無需修改，現有實現已滿足需求
+- [x] 4.1 單元測試實現 ✅ 已實現
+- **Files**: tests/unit/components/TaskConfiguration.test.js, tests/unit/components/AddServiceModal.test.js
+- **Current Implementation**:
+  - ✅ AddServiceModal 組件單元測試已實現並全部通過（14個測試用例）
+  - ✅ TaskConfiguration 組件單元測試已實現並全部通過（7個測試用例）
+  - ✅ 已修復 TaskConfiguration 組件中的問題：
+    - 修復 `validateAllTasks` 初始化順序問題（將 `defineExpose` 移到函數定義之後）
+    - 添加缺失的 `createTaskConfigRules` 導入
+  - ✅ 測試覆蓋組件渲染、服務選擇、服務類型選擇、表單驗證、事件發射、任務管理、SOP 綁定等核心功能
+  - ✅ 使用 Vitest + @vue/test-utils 進行測試
+  - ✅ Mock 了所有外部依賴（API、Store、Router等）
+- **Requirements**: 所有 BR1.2.2 功能需求
+- **Next Action**: 無需修改，現有實現已滿足需求
+- [x] 4.2 E2E 測試實現 ✅ 已實現
+- **File**: tests/e2e/clients/client-add-services.spec.ts
+- **Current Implementation**:
+  - ✅ 測試數據設置和清理（beforeAll/afterAll）
+  - ✅ 導航和基本驗證測試
+  - ✅ 新增客戶服務測試（定期服務、一次性服務）
+  - ✅ 服務類型預設值自動帶入測試
+  - ✅ 表單驗證測試（定期服務必須至少勾選一個月份）
+  - ✅ 任務配置測試（任務生成時間、到期日、預覽）
+  - ✅ 保存服務設定測試
+  - ✅ 測試覆蓋所有主要功能場景
+  - ✅ 使用 Playwright 進行 E2E 測試
+  - ✅ 測試在正式環境執行（baseURL: https://v2.horgoscpa.com）
+- **Requirements**: 所有 BR1.2.2 驗收標準
+- **Next Action**: 無需修改，現有實現已滿足需求
+- **Note**: 測試涵蓋了客戶新增流程中的服務設定分頁和客戶詳情頁面的服務管理功能，確保所有核心功能都能正常運作
+- [x] 5.1 組件整合測試 ✅ 已實現
+- **File**: tests/integration/components/client-services.test.js
+- **Current Implementation**:
+  - ✅ API 整合測試（創建客戶服務、批量保存任務配置、錯誤處理）
+  - ✅ 組件交互測試（ClientAddServices 與 AddServiceModal、TaskConfiguration 的交互）
+  - ✅ 數據流測試（服務數據傳遞、任務配置傳遞）
+  - ✅ SOP 自動綁定流程測試
+  - ✅ 任務配置保存流程測試（驗證、批量保存）
+  - ✅ 錯誤處理測試（API 調用失敗、驗證失敗）
+  - ✅ 測試覆蓋所有主要組件交互場景
+  - ✅ 使用 Vitest + @vue/test-utils 進行測試
+  - ✅ Mock 了所有外部依賴（API、Store、Router、子組件等）
+  - ✅ 更新了 vitest.config.js 以包含 integration 目錄
+  - ✅ 測試結果：15/15 全部通過
+  - ✅ 已修復 mock store 中缺少 `addTempService` 方法的問題
+- **Requirements**: 所有 BR1.2.2 功能需求
+- **Next Action**: 無需修改，現有實現已滿足需求
+- [x] 5.2 最終驗證和部署 ✅ 已完成
+- **Current Implementation**:
+  - ✅ 執行所有測試驗證：
+    - 單元測試：21/21 通過（AddServiceModal: 14個, TaskConfiguration: 7個）
+    - 整合測試：15/15 通過
+  - ✅ 建置前端專案成功（無錯誤）
+  - ✅ 部署到生產環境成功（Cloudflare Pages）
+    - 部署 URL: https://v2.horgoscpa.com
+    - 部署狀態: 成功
+  - ✅ 使用 Browser MCP 進行人工驗證：
+    - 客戶新增服務設定分頁正常載入
+    - 「+ 新增服務」按鈕正常運作
+    - 新增服務模態框正常顯示
+    - 服務類型選擇（定期/一次性）正常
+    - 執行頻率設定（1-12月複選框）正常顯示
+    - 是否用於自動生成任務開關正常顯示
+    - 所有 UI 元素和功能正常運作
+- **Requirements**: 所有 BR1.2.2 驗收標準
+- **Next Action**: 無需修改，所有驗證和部署已完成

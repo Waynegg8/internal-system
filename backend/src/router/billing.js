@@ -21,5 +21,10 @@ export const billingRoutes = [
     methods: ["POST"],
     handler: withAuth(handleBilling),
   },
+  {
+    pattern: /^\/api\/v2\/billing\/batch$/,
+    methods: ["DELETE"],
+    handler: withAuth(handleBilling),
+  },
 ];
 

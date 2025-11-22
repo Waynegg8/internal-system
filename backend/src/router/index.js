@@ -30,6 +30,7 @@ import { userProfileRoutes } from "./user-profile.js";
 import { attachmentsRoutes } from "./attachments.js";
 import { mcpRoutes } from "./mcp.js";
 import { clientServiceComponentsRoutes } from "./client-service-components.js";
+import { notificationsRoutes } from "./notifications.js";
 
 // 路由表（按優先級排序：更具體的路由應該在前面）
 const routes = [
@@ -59,6 +60,7 @@ const routes = [
   ...automationRoutes,
   ...userProfileRoutes,
   ...attachmentsRoutes,
+  ...notificationsRoutes,
 ];
 
 /**

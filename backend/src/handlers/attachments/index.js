@@ -31,13 +31,149 @@ function extFromFilename(name) {
  * 获取附件列表
  */
 export async function handleGetAttachments(request, env, ctx, requestId, url) {
-  const params = url.searchParams;
-  const entityType = (params.get("entity_type") || params.get("type") || "").trim();
-  const entityId = (params.get("entity_id") || params.get("client") || "").trim();
-  
-  // 如果没有指定 entity_type 和 entity_id，返回所有附件（用于知识库附件列表）
-  if (!entityType && !entityId) {
-    // 允许不传参数，返回所有附件
+  try {
+    const params = url.searchParams;
+    const entityType = (params.get("entity_type") || params.get("type") || "").trim();
+    const entityId = (params.get("entity_id") || params.get("client") || "").trim();
+    
+    // 如果没有指定 entity_type 和 entity_id，返回所有附件（用于知识库附件列表）
+    if (!entityType && !entityId) {
+      // 允许不传参数，返回所有附件
+      const page = Math.max(1, parseInt(params.get("page") || params.get("per_page") || "1", 10));
+      const perPage = Math.min(100, Math.max(1, parseInt(params.get("perPage") || params.get("per_page") || "20", 10)));
+      const offset = (page - 1) * perPage;
+      const q = (params.get("q") || "").trim();
+      const fileType = (params.get("file_type") || "all").trim();
+      const dateFrom = (params.get("dateFrom") || "").trim();
+      const dateTo = (params.get("dateTo") || "").trim();
+      const clientFilter = (params.get("client") || "").trim();
+      const typeFilter = (params.get("type") || "").trim();
+      
+      const where = ["a.is_deleted = 0"];
+      const binds = [];
+      
+      if (q) { 
+        where.push("(a.filename LIKE ?)"); 
+        binds.push(`%${q}%`); 
+      }
+      // 附件系統專為任務服務，移除客戶篩選
+      // if (clientFilter) {
+      //   where.push("a.entity_id = ? AND a.entity_type = 'client'");
+      //   binds.push(clientFilter);
+      // }
+      // 附件系統專為任務服務，只支持任務類型
+      if (typeFilter === 'task') {
+        where.push("a.entity_type = ?");
+        binds.push(typeFilter);
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) { 
+        where.push("a.uploaded_at >= ?"); 
+        binds.push(`${dateFrom}T00:00:00.000Z`); 
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) { 
+        where.push("a.uploaded_at <= ?"); 
+        binds.push(`${dateTo}T23:59:59.999Z`); 
+      }
+      if (fileType !== 'all') {
+        if (fileType === 'pdf') { 
+          where.push("(LOWER(a.filename) LIKE '%.pdf' OR LOWER(a.content_type) = 'application/pdf')"); 
+        } else if (fileType === 'image') { 
+          where.push("(LOWER(a.content_type) LIKE 'image/%' OR LOWER(a.filename) GLOB '*.jpg' OR LOWER(a.filename) GLOB '*.jpeg' OR LOWER(a.filename) GLOB '*.png')"); 
+        } else if (fileType === 'excel') { 
+          where.push("(LOWER(a.filename) GLOB '*.xls' OR LOWER(a.filename) GLOB '*.xlsx' OR LOWER(a.content_type) IN ('application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))"); 
+        } else if (fileType === 'word') { 
+          where.push("(LOWER(a.filename) GLOB '*.doc' OR LOWER(a.filename) GLOB '*.docx' OR LOWER(a.content_type) IN ('application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'))"); 
+        }
+      }
+      
+      const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : '';
+      
+      // 先查總數
+      const countSql = `SELECT COUNT(1) AS total FROM Attachments a ${whereSql}`;
+      let countRow;
+      try {
+        countRow = await env.DATABASE.prepare(countSql).bind(...binds).first();
+      } catch (countError) {
+        console.error(`[Attachments] Count query error:`, countError);
+        throw countError;
+      }
+      const total = Number(countRow?.total || 0);
+      
+      // 簡單查詢，不進行 JOIN
+      const sql = `SELECT 
+        a.attachment_id, 
+        a.entity_type, 
+        a.entity_id, 
+        a.object_key,
+        a.filename, 
+        a.content_type, 
+        a.size_bytes, 
+        a.uploader_user_id, 
+        a.uploaded_at
+      FROM Attachments a
+      ${whereSql}
+      ORDER BY a.uploaded_at DESC
+      LIMIT ? OFFSET ?`;
+      
+      let rows;
+      try {
+        rows = await env.DATABASE.prepare(sql).bind(...binds, perPage, offset).all();
+      } catch (queryError) {
+        console.error(`[Attachments] Query error:`, queryError);
+        console.error(`[Attachments] SQL:`, sql);
+        console.error(`[Attachments] Binds:`, [...binds, perPage, offset]);
+        throw queryError;
+      }
+      
+      // 查詢上傳者名稱
+      const uploaderIds = [...new Set((rows?.results || []).map(r => r.uploader_user_id).filter(Boolean))];
+      let uploaderMap = {};
+      if (uploaderIds.length > 0) {
+        const placeholders = uploaderIds.map(() => '?').join(',');
+        const uploaders = await env.DATABASE.prepare(
+          `SELECT user_id, name FROM Users WHERE user_id IN (${placeholders}) AND is_deleted = 0`
+        ).bind(...uploaderIds).all();
+        uploaders?.results?.forEach(u => {
+          uploaderMap[u.user_id] = u.name;
+        });
+      }
+      
+      const data = (rows?.results || []).map(r => ({
+        attachment_id: r.attachment_id,
+        entity_type: r.entity_type,
+        entity_id: r.entity_id,
+        object_key: r.object_key,
+        filename: r.filename,
+        content_type: r.content_type,
+        size_bytes: Number(r.size_bytes || 0),
+        uploader_user_id: r.uploader_user_id,
+        uploader_name: uploaderMap[r.uploader_user_id] || String(r.uploader_user_id || ''),
+        uploaded_at: r.uploaded_at,
+        // 保持向後兼容的 camelCase 欄位
+        id: r.attachment_id,
+        entityType: r.entity_type,
+        entityId: r.entity_id,
+        objectKey: r.object_key,
+        contentType: r.content_type,
+        sizeBytes: Number(r.size_bytes || 0),
+        uploaderUserId: r.uploader_user_id,
+        uploaderName: uploaderMap[r.uploader_user_id] || String(r.uploader_user_id || ''),
+        uploadedAt: r.uploaded_at,
+      }));
+      
+      return successResponse({ attachments: data, total, page, perPage }, "查詢成功", requestId);
+    }
+    
+    // 如果有 entityType 和 entityId，查詢特定實體的附件
+    if (!entityType || !entityId) {
+      return errorResponse(422, "VALIDATION_ERROR", "entity_type 與 entity_id 必填", null, requestId);
+    }
+    
+    // 附件系統專為任務服務，只允許關聯到任務
+    if (entityType !== 'task') {
+      return errorResponse(422, "VALIDATION_ERROR", "附件系統專為任務服務，entity_type 必須為 'task'", null, requestId);
+    }
+    
     const page = Math.max(1, parseInt(params.get("page") || params.get("per_page") || "1", 10));
     const perPage = Math.min(100, Math.max(1, parseInt(params.get("perPage") || params.get("per_page") || "20", 10)));
     const offset = (page - 1) * perPage;
@@ -45,64 +181,78 @@ export async function handleGetAttachments(request, env, ctx, requestId, url) {
     const fileType = (params.get("file_type") || "all").trim();
     const dateFrom = (params.get("dateFrom") || "").trim();
     const dateTo = (params.get("dateTo") || "").trim();
-    const clientFilter = (params.get("client") || "").trim();
-    const typeFilter = (params.get("type") || "").trim();
-    
-    const where = ["is_deleted = 0"];
-    const binds = [];
+
+    const where = ["a.is_deleted = 0", "a.entity_type = ?", "a.entity_id = ?"];
+    const binds = [entityType, entityId];
     
     if (q) { 
-      where.push("(filename LIKE ?)"); 
+      where.push("(a.filename LIKE ?)"); 
       binds.push(`%${q}%`); 
     }
-    if (clientFilter) {
-      where.push("entity_id = ? AND entity_type = 'client'");
-      binds.push(clientFilter);
-    }
-    if (typeFilter && ['client','receipt','sop','task'].includes(typeFilter)) {
-      where.push("entity_type = ?");
-      binds.push(typeFilter);
-    }
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) { 
-      where.push("uploaded_at >= ?"); 
+      where.push("a.uploaded_at >= ?"); 
       binds.push(`${dateFrom}T00:00:00.000Z`); 
     }
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) { 
-      where.push("uploaded_at <= ?"); 
+      where.push("a.uploaded_at <= ?"); 
       binds.push(`${dateTo}T23:59:59.999Z`); 
     }
     if (fileType !== 'all') {
       if (fileType === 'pdf') { 
-        where.push("(LOWER(filename) LIKE '%.pdf' OR LOWER(content_type) = 'application/pdf')"); 
+        where.push("(LOWER(a.filename) LIKE '%.pdf' OR LOWER(a.content_type) = 'application/pdf')"); 
       } else if (fileType === 'image') { 
-        where.push("(LOWER(content_type) LIKE 'image/%' OR LOWER(filename) GLOB '*.jpg' OR LOWER(filename) GLOB '*.jpeg' OR LOWER(filename) GLOB '*.png')"); 
+        where.push("(LOWER(a.content_type) LIKE 'image/%' OR LOWER(a.filename) GLOB '*.jpg' OR LOWER(a.filename) GLOB '*.jpeg' OR LOWER(a.filename) GLOB '*.png')"); 
       } else if (fileType === 'excel') { 
-        where.push("(LOWER(filename) GLOB '*.xls' OR LOWER(filename) GLOB '*.xlsx' OR LOWER(content_type) IN ('application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))"); 
+        where.push("(LOWER(a.filename) GLOB '*.xls' OR LOWER(a.filename) GLOB '*.xlsx' OR LOWER(a.content_type) IN ('application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))"); 
       } else if (fileType === 'word') { 
-        where.push("(LOWER(filename) GLOB '*.doc' OR LOWER(filename) GLOB '*.docx' OR LOWER(content_type) IN ('application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'))"); 
+        where.push("(LOWER(a.filename) GLOB '*.doc' OR LOWER(a.filename) GLOB '*.docx' OR LOWER(a.content_type) IN ('application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'))"); 
       }
     }
     
     const whereSql = `WHERE ${where.join(" AND ")}`;
     
-    const countRow = await env.DATABASE.prepare(`SELECT COUNT(1) AS total FROM Attachments ${whereSql}`).bind(...binds).first();
+    let countRow;
+    try {
+      countRow = await env.DATABASE.prepare(`SELECT COUNT(1) AS total FROM Attachments a ${whereSql}`).bind(...binds).first();
+    } catch (countError) {
+      console.error(`[Attachments] Count query error:`, countError);
+      throw countError;
+    }
     const total = Number(countRow?.total || 0);
     
-    const sql = `SELECT a.attachment_id, a.entity_type, a.entity_id, a.filename, a.content_type, a.size_bytes, a.uploader_user_id, a.uploaded_at
-                 FROM Attachments a
-                 ${whereSql}
-                 ORDER BY a.uploaded_at DESC
-                 LIMIT ? OFFSET ?`;
+    // 簡單查詢，不進行 JOIN
+    const sql = `SELECT 
+      a.attachment_id, 
+      a.entity_type, 
+      a.entity_id, 
+      a.object_key,
+      a.filename, 
+      a.content_type, 
+      a.size_bytes, 
+      a.uploader_user_id, 
+      a.uploaded_at
+    FROM Attachments a
+    ${whereSql}
+    ORDER BY a.uploaded_at DESC
+    LIMIT ? OFFSET ?`;
     
-    const rows = await env.DATABASE.prepare(sql).bind(...binds, perPage, offset).all();
+    let rows;
+    try {
+      rows = await env.DATABASE.prepare(sql).bind(...binds, perPage, offset).all();
+    } catch (queryError) {
+      console.error(`[Attachments] Query error:`, queryError);
+      console.error(`[Attachments] SQL:`, sql);
+      console.error(`[Attachments] Binds:`, [...binds, perPage, offset]);
+      throw queryError;
+    }
     
-    // 查询上传者姓名
+    // 查詢上傳者名稱
     const uploaderIds = [...new Set((rows?.results || []).map(r => r.uploader_user_id).filter(Boolean))];
     let uploaderMap = {};
     if (uploaderIds.length > 0) {
       const placeholders = uploaderIds.map(() => '?').join(',');
       const uploaders = await env.DATABASE.prepare(
-        `SELECT user_id, name FROM Users WHERE user_id IN (${placeholders})`
+        `SELECT user_id, name FROM Users WHERE user_id IN (${placeholders}) AND is_deleted = 0`
       ).bind(...uploaderIds).all();
       uploaders?.results?.forEach(u => {
         uploaderMap[u.user_id] = u.name;
@@ -110,10 +260,21 @@ export async function handleGetAttachments(request, env, ctx, requestId, url) {
     }
     
     const data = (rows?.results || []).map(r => ({
+      attachment_id: r.attachment_id,
+      entity_type: r.entity_type,
+      entity_id: r.entity_id,
+      object_key: r.object_key,
+      filename: r.filename,
+      content_type: r.content_type,
+      size_bytes: Number(r.size_bytes || 0),
+      uploader_user_id: r.uploader_user_id,
+      uploader_name: uploaderMap[r.uploader_user_id] || String(r.uploader_user_id || ''),
+      uploaded_at: r.uploaded_at,
+      // 保持向後兼容的 camelCase 欄位
       id: r.attachment_id,
       entityType: r.entity_type,
       entityId: r.entity_id,
-      filename: r.filename,
+      objectKey: r.object_key,
       contentType: r.content_type,
       sizeBytes: Number(r.size_bytes || 0),
       uploaderUserId: r.uploader_user_id,
@@ -122,88 +283,10 @@ export async function handleGetAttachments(request, env, ctx, requestId, url) {
     }));
     
     return successResponse({ attachments: data, total, page, perPage }, "查詢成功", requestId);
+  } catch (error) {
+    console.error(`[Attachments] handleGetAttachments error:`, error);
+    return errorResponse(500, "INTERNAL_ERROR", `查詢附件列表失敗: ${error.message}`, { error: String(error) }, requestId);
   }
-  
-  if (!entityType || !entityId) {
-    return errorResponse(422, "VALIDATION_ERROR", "entity_type 與 entity_id 必填", null, requestId);
-  }
-  
-  if (!['client','receipt','sop','task'].includes(entityType)) {
-    return errorResponse(422, "VALIDATION_ERROR", "entity_type 不合法", null, requestId);
-  }
-  
-  const page = Math.max(1, parseInt(params.get("page") || params.get("per_page") || "1", 10));
-  const perPage = Math.min(100, Math.max(1, parseInt(params.get("perPage") || params.get("per_page") || "20", 10)));
-  const offset = (page - 1) * perPage;
-  const q = (params.get("q") || "").trim();
-  const fileType = (params.get("file_type") || "all").trim();
-  const dateFrom = (params.get("dateFrom") || "").trim();
-  const dateTo = (params.get("dateTo") || "").trim();
-
-  const where = ["is_deleted = 0", "entity_type = ?", "entity_id = ?"];
-  const binds = [entityType, entityId];
-  
-  if (q) { 
-    where.push("(filename LIKE ?)"); 
-    binds.push(`%${q}%`); 
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) { 
-    where.push("uploaded_at >= ?"); 
-    binds.push(`${dateFrom}T00:00:00.000Z`); 
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) { 
-    where.push("uploaded_at <= ?"); 
-    binds.push(`${dateTo}T23:59:59.999Z`); 
-  }
-  if (fileType !== 'all') {
-    if (fileType === 'pdf') { 
-      where.push("(LOWER(filename) LIKE '%.pdf' OR LOWER(content_type) = 'application/pdf')"); 
-    } else if (fileType === 'image') { 
-      where.push("(LOWER(content_type) LIKE 'image/%' OR LOWER(filename) GLOB '*.jpg' OR LOWER(filename) GLOB '*.jpeg' OR LOWER(filename) GLOB '*.png')"); 
-    } else if (fileType === 'excel') { 
-      where.push("(LOWER(filename) GLOB '*.xls' OR LOWER(filename) GLOB '*.xlsx' OR LOWER(content_type) IN ('application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))"); 
-    } else if (fileType === 'word') { 
-      where.push("(LOWER(filename) GLOB '*.doc' OR LOWER(filename) GLOB '*.docx' OR LOWER(content_type) IN ('application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'))"); 
-    }
-  }
-  
-  const whereSql = `WHERE ${where.join(" AND ")}`;
-  
-  const countRow = await env.DATABASE.prepare(`SELECT COUNT(1) AS total FROM Attachments ${whereSql}`).bind(...binds).first();
-  const total = Number(countRow?.total || 0);
-  
-  const sql = `SELECT a.attachment_id, a.filename, a.content_type, a.size_bytes, a.uploader_user_id, a.uploaded_at
-               FROM Attachments a
-               ${whereSql}
-               ORDER BY a.uploaded_at DESC
-               LIMIT ? OFFSET ?`;
-  
-  const rows = await env.DATABASE.prepare(sql).bind(...binds, perPage, offset).all();
-  
-  // 查询上传者姓名
-  const uploaderIds = [...new Set((rows?.results || []).map(r => r.uploader_user_id).filter(Boolean))];
-  let uploaderMap = {};
-  if (uploaderIds.length > 0) {
-    const placeholders = uploaderIds.map(() => '?').join(',');
-    const uploaders = await env.DATABASE.prepare(
-      `SELECT user_id, name FROM Users WHERE user_id IN (${placeholders})`
-    ).bind(...uploaderIds).all();
-    uploaders?.results?.forEach(u => {
-      uploaderMap[u.user_id] = u.name;
-    });
-  }
-  
-  const data = (rows?.results || []).map(r => ({
-    id: r.attachment_id,
-    filename: r.filename,
-    contentType: r.content_type,
-    sizeBytes: Number(r.size_bytes || 0),
-    uploaderUserId: r.uploader_user_id,
-    uploaderName: uploaderMap[r.uploader_user_id] || String(r.uploader_user_id || ''),
-    uploadedAt: r.uploaded_at,
-  }));
-  
-  return successResponse({ attachments: data, total, page, perPage }, "查詢成功", requestId);
 }
 
 /**
@@ -297,9 +380,10 @@ export async function handleGetUploadSign(request, env, ctx, requestId, url) {
   const contentType = String(body?.content_type || "").trim().toLowerCase();
   const contentLength = Number(body?.content_length || 0);
   
-  if (!['client','receipt','sop','task'].includes(entityType)) {
-    return errorResponse(422, "VALIDATION_ERROR", "entity_type 不合法", null, requestId);
-  }
+    // 附件系統專為任務服務，只允許關聯到任務
+    if (entityType !== 'task') {
+      return errorResponse(422, "VALIDATION_ERROR", "附件系統專為任務服務，entity_type 必須為 'task'", null, requestId);
+    }
   if (!entityId) {
     return errorResponse(422, "VALIDATION_ERROR", "entity_id 必填", null, requestId);
   }
@@ -309,15 +393,17 @@ export async function handleGetUploadSign(request, env, ctx, requestId, url) {
   if (!Number.isFinite(contentLength) || contentLength <= 0) {
     return errorResponse(422, "VALIDATION_ERROR", "content_length 不合法", null, requestId);
   }
-  if (contentLength > 10 * 1024 * 1024) {
-    return errorResponse(413, "PAYLOAD_TOO_LARGE", "檔案大小超過限制（最大 10MB）", null, requestId);
+  if (contentLength > 25 * 1024 * 1024) {
+    return errorResponse(413, "PAYLOAD_TOO_LARGE", "檔案大小超過限制（最大 25MB）", null, requestId);
   }
   
-  const allowedExt = ["pdf","jpg","jpeg","png","xlsx","xls","docx","doc"];
+  const allowedExt = ["pdf","jpg","jpeg","png","gif","bmp","webp","xlsx","xls","docx","doc","ppt","pptx"];
   const allowedMime = [
-    "application/pdf","image/jpeg","image/png",
+    "application/pdf",
+    "image/jpeg","image/png","image/gif","image/bmp","image/webp",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/msword"
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/msword",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation","application/vnd.ms-powerpoint"
   ];
   const safeName = sanitizeFilename(filenameRaw);
   const ext = extFromFilename(safeName);
@@ -328,13 +414,12 @@ export async function handleGetUploadSign(request, env, ctx, requestId, url) {
     return errorResponse(422, "INVALID_FILE_TYPE", "不支援的檔案型別", null, requestId);
   }
   
-  // 数量上限
-  const limits = { client:20, receipt:5, sop:10, task:10 };
-  const limit = limits[entityType] ?? 20;
-  const cntRow = await env.DATABASE.prepare("SELECT COUNT(1) AS c FROM Attachments WHERE is_deleted = 0 AND entity_type = ? AND entity_id = ?").bind(entityType, entityId).first();
-  if (Number(cntRow?.c || 0) >= limit) {
-    return errorResponse(409, "TOO_MANY_FILES", `已達到附件數量上限（最多 ${limit} 個）`, null, requestId);
-  }
+  // 附件系統專為任務服務，不限制數量
+  // const limit = 10;
+  // const cntRow = await env.DATABASE.prepare("SELECT COUNT(1) AS c FROM Attachments WHERE is_deleted = 0 AND entity_type = ? AND entity_id = ?").bind(entityType, entityId).first();
+  // if (Number(cntRow?.c || 0) >= limit) {
+  //   return errorResponse(409, "TOO_MANY_FILES", `已達到附件數量上限（最多 ${limit} 個）`, null, requestId);
+  // }
   
   // 产生 objectKey 与 token
   const envName = String(env.APP_ENV || "dev");

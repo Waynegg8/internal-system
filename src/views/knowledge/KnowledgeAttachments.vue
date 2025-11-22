@@ -22,12 +22,17 @@
       style="margin-bottom: 16px"
     />
 
+    <!-- 任務篩選橫幅 - 從任務詳情頁跳轉過來時顯示 -->
     <div v-if="taskFilterId" class="task-filter-banner">
       <a-space size="small">
         <a-tag color="blue">任務 {{ taskFilterId }}</a-tag>
         <span>目前僅顯示此任務的附件</span>
-        <a-button size="small" type="primary" @click="handleReturnToTask">回到任務</a-button>
-        <a-button size="small" @click="clearTaskFilter">清除篩選</a-button>
+        <a-button size="small" type="primary" @click="handleReturnToTask">
+          <template #icon>
+            <ArrowLeftOutlined />
+          </template>
+          回到任務
+        </a-button>
       </a-space>
     </div>
     
@@ -58,73 +63,20 @@
             </div>
           </template>
 
-          <a-spin :spinning="attachmentLoading">
-            <!-- 附件列表 -->
-            <a-list
-              v-if="attachments.length > 0"
-              :data-source="attachments"
-              :bordered="false"
-            >
-              <template #renderItem="{ item }">
-                <a-list-item
-                  :class="{ 'attachment-item-active': isCurrentAttachment(item) }"
-                  @click="handleViewAttachment(item)"
-                  style="cursor: pointer; padding: 6px"
-                >
-                  <a-list-item-meta>
-                    <template #avatar>
-                      <FileOutlined style="font-size: 24px; color: #1890ff" />
-                    </template>
-                    <template #title>
-                      <div style="display: flex; flex-direction: column; gap: 4px">
-                        <span style="font-weight: 500">{{ getAttachmentTitle(item) }}</span>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap">
-                          <a-tag
-                            v-if="getAttachmentType(item)"
-                            color="blue"
-                            style="margin: 0"
-                          >
-                            {{ getAttachmentTypeLabel(item) }}
-                          </a-tag>
-                          <a-tag
-                            v-if="formatFileSize(item)"
-                            color="green"
-                            style="margin: 0"
-                          >
-                            {{ formatFileSize(item) }}
-                          </a-tag>
-                        </div>
-                      </div>
-                    </template>
-                  </a-list-item-meta>
-                </a-list-item>
-              </template>
-            </a-list>
-
-            <!-- 空狀態 -->
-            <a-empty
-              v-else
-              description="尚無附件，請點擊右上角「+ 新增」按鈕上傳"
-              style="padding: 40px 0"
-            />
-
-            <!-- 分頁 -->
-            <div
-              v-if="attachmentPagination.total > attachmentPagination.perPage"
-              style="margin-top: 16px; text-align: center"
-            >
-              <a-pagination
-                v-model:current="attachmentPagination.page"
-                v-model:page-size="attachmentPagination.perPage"
-                :total="attachmentPagination.total"
-                :page-size-options="['10', '20', '50', '100']"
-                show-size-changer
-                show-total
-                @change="handlePaginationChange"
-                @show-size-change="handlePaginationChange"
-              />
-            </div>
-          </a-spin>
+          <!-- 附件列表組件 -->
+          <AttachmentList
+            :attachments="attachments"
+            :loading="attachmentLoading"
+            :pagination="{
+              current: attachmentPagination.page,
+              pageSize: attachmentPagination.perPage,
+              total: attachmentPagination.total
+            }"
+            :selected-attachment-id="currentAttachment ? getAttachmentId(currentAttachment) : undefined"
+            @attachment-click="handleViewAttachment"
+            @page-change="handlePaginationChange"
+            @page-size-change="handlePageSizeChange"
+          />
         </a-card>
       </a-col>
 
@@ -163,12 +115,7 @@
       </a-col>
     </a-row>
 
-    <!-- 附件上傳抽屜 -->
-    <AttachmentUploadDrawer
-      v-model:visible="drawerVisible"
-      @close="handleDrawerClose"
-      @success="handleDrawerSuccess"
-    />
+    <!-- 附件上傳抽屜 - 已移除，附件系統專為任務服務，必須從任務詳情頁上傳 -->
   </div>
 </template>
 
@@ -178,10 +125,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { useKnowledgeStore } from '@/stores/knowledge'
 import { storeToRefs } from 'pinia'
 import { usePageAlert } from '@/composables/usePageAlert'
-import { FileOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons-vue'
+import { FileOutlined, MenuFoldOutlined, MenuUnfoldOutlined, ArrowLeftOutlined } from '@ant-design/icons-vue'
 import { h } from 'vue'
 import AttachmentPreview from '@/components/knowledge/AttachmentPreview.vue'
-import AttachmentUploadDrawer from '@/components/knowledge/AttachmentUploadDrawer.vue'
+// 附件上傳功能已移除 - 附件系統專為任務服務，必須從任務詳情頁上傳
+import AttachmentList from '@/components/attachments/AttachmentList.vue'
 
 // Store
 const knowledgeStore = useKnowledgeStore()
@@ -194,17 +142,14 @@ const {
   attachmentFilters: storeAttachmentFilters
 } = storeToRefs(knowledgeStore)
 
-// Inject addAttachmentTrigger from parent
-const addAttachmentTrigger = inject('addAttachmentTrigger', ref(0))
+// 附件上傳功能已移除 - 附件系統專為任務服務
+// const addAttachmentTrigger = inject('addAttachmentTrigger', ref(0))
 
 // Local state
 const listCollapsed = ref(false)
-const drawerVisible = ref(false)
+// const drawerVisible = ref(false) // 已移除上傳功能
 const route = useRoute()
 const router = useRouter()
-
-// 使用本地 ref 來綁定表單，然後同步到 store
-const localAttachmentType = ref('')
 
 // 確保 storeAttachmentFilters 存在且有值
 const safeAttachmentFilters = computed(() => {
@@ -214,35 +159,12 @@ const safeAttachmentFilters = computed(() => {
   return storeAttachmentFilters.value
 })
 
-// 從 store 同步到本地
-watch(
-  () => safeAttachmentFilters.value?.type,
-  (newType) => {
-    if (newType !== undefined && newType !== null) {
-      localAttachmentType.value = newType
-    } else {
-      localAttachmentType.value = ''
-    }
-  },
-  { immediate: true }
-)
-
-// 同步本地變更到 store
-watch(localAttachmentType, (newType) => {
-  // 確保 safeAttachmentFilters 已經初始化
-  if (!storeAttachmentFilters || !storeAttachmentFilters.value) {
-    knowledgeStore.setAttachmentFilters({ q: '', client: '', type: newType || '' })
-    return
-  }
-  const currentFilters = safeAttachmentFilters.value
-  knowledgeStore.setAttachmentFilters({ ...currentFilters, type: newType || '' })
-}, { flush: 'post' })
-
 // 列表列寬度（左側 8 列，右側 16 列，右側佔約 67% 以舒適顯示 A4 文件）
 const listColSpan = computed(() => listCollapsed.value ? 0 : 8)
 const previewColSpan = computed(() => listCollapsed.value ? 24 : 16)
 const taskFilterId = computed(() => safeAttachmentFilters.value?.taskId || '')
 const returnToTaskPath = computed(() => route.query.returnTo || (taskFilterId.value ? `/tasks/${taskFilterId.value}` : ''))
+
 
 // 切換列表收合
 const toggleListCollapse = () => {
@@ -256,7 +178,8 @@ const getAttachmentTitle = (attachment) => {
 
 // 獲取附件ID（支持多種字段名格式）
 const getAttachmentId = (attachment) => {
-  return attachment.document_id || attachment.id || attachment.attachment_id || attachment.file_id
+  if (!attachment) return undefined
+  return attachment.attachment_id || attachment.id || attachment.document_id || attachment.file_id
 }
 
 // 獲取附件類型
@@ -307,7 +230,16 @@ const isCurrentAttachment = (attachment) => {
 
 // 處理查看附件
 const handleViewAttachment = (attachment) => {
-  currentAttachment.value = attachment
+  console.log('[KnowledgeAttachments] handleViewAttachment called:', attachment)
+  if (!attachment) {
+    console.warn('[KnowledgeAttachments] No attachment provided')
+    return
+  }
+  
+  // 使用 store 的方法設置當前附件
+  knowledgeStore.setCurrentAttachment(attachment)
+  console.log('[KnowledgeAttachments] currentAttachment set to:', knowledgeStore.currentAttachment)
+  console.log('[KnowledgeAttachments] Attachment ID:', getAttachmentId(attachment))
 }
 
 // 處理下載附件
@@ -351,31 +283,66 @@ const handleDeleteAttachment = async (attachment) => {
   }
 }
 
+// 附件上傳功能已移除 - 附件系統專為任務服務
 // 抽屜關閉
-const handleDrawerClose = () => {
-  drawerVisible.value = false
-}
+// const handleDrawerClose = () => {
+//   drawerVisible.value = false
+// }
 
 // 抽屜上傳成功
-const handleDrawerSuccess = async () => {
-  // 重置分頁到第一頁，確保能看到新上傳的附件
-  knowledgeStore.setAttachmentPagination({ page: 1 })
-  // 延遲重新載入列表，讓上傳的附件對象有時間被添加到 store
-  setTimeout(async () => {
-    await loadAttachments()
-  }, 100)
-}
+// const handleDrawerSuccess = async () => {
+//   // 重置分頁到第一頁，確保能看到新上傳的附件
+//   knowledgeStore.setAttachmentPagination({ page: 1 })
+//   // 延遲重新載入列表，讓上傳的附件對象有時間被添加到 store
+//   setTimeout(async () => {
+//     await loadAttachments()
+//   }, 100)
+// }
 
-// 處理篩選變更
-const handleFilterChange = async () => {
-  // 重置分頁到第一頁
-  knowledgeStore.setAttachmentPagination({ page: 1 })
-  // 重新載入數據
-  await loadAttachments()
-}
+// 監聽 KnowledgeLayout 的篩選變化（通過 store 的 filters）
+// 附件系統專為任務服務，只使用關鍵字篩選
+// 任務篩選通過 URL 參數 taskId 自動設置，不需要用戶手動選擇
+const { filters: layoutFilters, activeTab } = storeToRefs(knowledgeStore)
+
+watch(
+  () => layoutFilters.value,
+  async (newFilters) => {
+    // 只在附件 tab 且沒有任務篩選時才響應全局關鍵字篩選
+    // 當有任務篩選時，優先使用任務篩選
+    if (activeTab.value === 'attachments' && !taskFilterId.value && newFilters) {
+      knowledgeStore.setAttachmentFilters({
+        q: newFilters.q || ''
+      })
+      knowledgeStore.setAttachmentPagination({ page: 1 })
+      await loadAttachments()
+    }
+  },
+  { deep: true }
+)
+
+// 監聽附件列表變化，當從任務詳情頁跳轉過來時自動選中第一個附件進行預覽
+watch(
+  () => attachments.value,
+  (newAttachments) => {
+    // 當有任務篩選且附件列表載入完成時，自動選中第一個附件進行預覽
+    if (taskFilterId.value && newAttachments && newAttachments.length > 0 && !currentAttachment.value) {
+      // 延遲一下確保 DOM 已更新
+      setTimeout(() => {
+        handleViewAttachment(newAttachments[0])
+      }, 100)
+    }
+  },
+  { immediate: true }
+)
 
 // 處理分頁變更
-const handlePaginationChange = (page, pageSize) => {
+const handlePaginationChange = ({ page, pageSize }) => {
+  knowledgeStore.setAttachmentPagination({ page, perPage: pageSize })
+  loadAttachments()
+}
+
+// 處理每頁顯示筆數變更
+const handlePageSizeChange = ({ page, pageSize }) => {
   knowledgeStore.setAttachmentPagination({ page, perPage: pageSize })
   loadAttachments()
 }
@@ -390,40 +357,48 @@ const loadAttachments = async () => {
   }
 }
 
+// 附件上傳功能已移除 - 附件系統專為任務服務
 // 監聽 addAttachmentTrigger 變化，打開上傳抽屜
-watch(
-  () => addAttachmentTrigger.value,
-  () => {
-    if (addAttachmentTrigger.value > 0) {
-      drawerVisible.value = true
-    }
-  }
-)
+// watch(
+//   () => addAttachmentTrigger.value,
+//   () => {
+//     if (addAttachmentTrigger.value > 0) {
+//       drawerVisible.value = true
+//     }
+//   }
+// )
+
 
 const applyTaskFilterFromQuery = async () => {
   const taskIdParam = route.query.taskId
   if (taskIdParam) {
+    // 設置任務篩選條件 - 附件系統專為任務服務
     knowledgeStore.setAttachmentFilters({
       taskId: String(taskIdParam),
-      type: 'task'
+      type: 'task',
+      q: safeAttachmentFilters.value?.q || ''
     })
-    localAttachmentType.value = 'task'
     knowledgeStore.setAttachmentPagination({ page: 1 })
     await loadAttachments()
+    
+    // 如果有附件，自動選中第一個進行預覽
+    if (attachments.value && attachments.value.length > 0 && !currentAttachment.value) {
+      handleViewAttachment(attachments.value[0])
+    }
   }
 }
 
-const clearTaskFilter = async () => {
-  const newQuery = { ...route.query }
-  delete newQuery.taskId
-  delete newQuery.returnTo
-  router.replace({ path: route.path, query: newQuery })
-
-  knowledgeStore.setAttachmentFilters({ taskId: '', type: '' })
-  localAttachmentType.value = ''
-  knowledgeStore.setAttachmentPagination({ page: 1 })
-  await loadAttachments()
-}
+// 附件系統專為任務服務，不提供清除任務篩選功能
+// 用戶必須通過「回到任務」按鈕返回任務詳情頁
+// const clearTaskFilter = async () => {
+//   const newQuery = { ...route.query }
+//   delete newQuery.taskId
+//   delete newQuery.returnTo
+//   router.replace({ path: route.path, query: newQuery })
+//   knowledgeStore.setAttachmentFilters({ taskId: '', type: '' })
+//   knowledgeStore.setAttachmentPagination({ page: 1 })
+//   await loadAttachments()
+// }
 
 const handleReturnToTask = () => {
   if (!taskFilterId.value) return
@@ -439,7 +414,6 @@ watch(
     }
     if (!newTaskId && oldTaskId) {
       knowledgeStore.setAttachmentFilters({ taskId: '' })
-      localAttachmentType.value = ''
       await loadAttachments()
     }
   }
@@ -447,21 +421,37 @@ watch(
 
 // 載入數據
 onMounted(async () => {
+  // 如果有 taskId 查詢參數，自動應用任務篩選
   if (route.query.taskId) {
     await applyTaskFilterFromQuery()
   } else {
     await loadAttachments()
   }
 })
+
+// 監聽路由查詢參數變化，特別是 tab 參數
+watch(
+  () => [route.query.tab, route.query.taskId],
+  (newValues, oldValues) => {
+    const [newTab, newTaskId] = newValues || []
+    const [oldTab, oldTaskId] = oldValues || []
+    if (newTab === 'attachments' && newTaskId && newTaskId !== oldTaskId) {
+      // 當切換到附件 tab 且有 taskId 時，自動應用任務篩選
+      applyTaskFilterFromQuery()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
 .knowledge-attachments-content {
   position: relative;
-  flex: 1;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
 }
 
 .task-filter-banner {
@@ -475,15 +465,20 @@ onMounted(async () => {
 
 .collapsed-toggle {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 72px; /* 移到標題下方，避免遮擋 */
+  left: 16px;
   z-index: 10;
+}
+
+/* 確保展開按鈕不會擋住任何內容 */
+.collapsed-toggle button {
+  margin: 0;
 }
 
 .attachments-row {
   flex: 1;
-  display: flex !important;
-  gap: 12px !important;
+  display: flex;
+  gap: 12px;
   align-items: stretch;
   min-height: 0;
 }
@@ -496,6 +491,20 @@ onMounted(async () => {
   min-height: 0;
 }
 
+.attachment-preview-col :deep(.ant-card) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.attachment-preview-col :deep(.ant-card-body) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .attachment-item-active {
   background-color: #e6f7ff;
   border-left: 3px solid #1890ff;
@@ -503,11 +512,10 @@ onMounted(async () => {
 
 .attachment-preview-wrapper {
   flex: 1;
-  min-height: 0;
+  min-height: 1000px; /* 確保預覽區域至少有 1000px 高度 */
   display: flex;
   flex-direction: column;
-  padding: 12px;
-  gap: 12px;
+  overflow: hidden; /* 由內部組件處理滾動 */
 }
 </style>
 

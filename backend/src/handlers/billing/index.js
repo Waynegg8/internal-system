@@ -3,7 +3,7 @@
  */
 
 import { errorResponse } from "../../utils/response.js";
-import { handleGetServiceBilling, handleCreateBilling, handleUpdateBilling } from "./billing-crud.js";
+import { handleGetServiceBilling, handleCreateBilling, handleUpdateBilling, handleBatchDeleteBilling } from "./billing-crud.js";
 
 export async function handleBilling(request, env, ctx, requestId, match, url) {
   const method = request.method.toUpperCase();
@@ -25,6 +25,11 @@ export async function handleBilling(request, env, ctx, requestId, match, url) {
       return await handleUpdateBilling(request, env, ctx, requestId, match, url);
     }
     
+    // DELETE /api/v2/billing/batch - 批量删除收费明细
+    if (method === "DELETE" && path === '/api/v2/billing/batch') {
+      return await handleBatchDeleteBilling(request, env, ctx, requestId, url);
+    }
+    
     return errorResponse(404, "NOT_FOUND", "路由不存在", null, requestId);
     
   } catch (err) {
@@ -32,6 +37,10 @@ export async function handleBilling(request, env, ctx, requestId, match, url) {
     return errorResponse(500, "INTERNAL_ERROR", "伺服器錯誤", null, requestId);
   }
 }
+
+
+
+
 
 
 

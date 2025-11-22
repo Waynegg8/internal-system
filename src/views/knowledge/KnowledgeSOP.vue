@@ -376,7 +376,7 @@ const handleAddSOP = () => {
 
 .collapsed-toggle {
   position: absolute;
-  top: 16px;
+  top: 72px; /* 移到標題下方，避免遮擋 */
   left: 16px;
   z-index: 10;
 }

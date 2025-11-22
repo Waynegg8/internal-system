@@ -279,10 +279,9 @@ export async function handleMonthlyRevenue(request, env, ctx, requestId, url) {
       return errorResponse(422, "VALIDATION_ERROR", "請選擇查詢月份", null, requestId);
     }
 
-    const period = formatMonth(year, month);
     const forceRefresh = params.get("refresh") === "1";
 
-    const cached = await getReportCache(env, REPORT_TYPE, period);
+    const cached = await getReportCache(env, REPORT_TYPE, year, month);
     const requiresUpgrade = (data) => {
       if (!data) return true;
       if (data.version !== REPORT_VERSION) {
@@ -297,11 +296,11 @@ export async function handleMonthlyRevenue(request, env, ctx, requestId, url) {
         cachedAt: cached.computedAt || null,
       });
     } else {
-      await deleteReportCache(env, REPORT_TYPE, period).catch(() => {});
+      await deleteReportCache(env, REPORT_TYPE, year, month).catch(() => {});
     }
 
     const data = await computeMonthlyRevenue(env, year, month);
-    await setReportCache(env, REPORT_TYPE, period, data);
+    await setReportCache(env, REPORT_TYPE, year, data, month);
 
     return successResponse(data, "查詢成功", requestId, {
       cacheHit: false,

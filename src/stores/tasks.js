@@ -26,7 +26,13 @@ export const useTaskStore = defineStore('tasks', {
       service_year: null,
       service_month: null,
       due: null,
-      hide_completed: false
+      hide_completed: false,
+      service_types: undefined,
+      tags_multiple: undefined,
+      service_month_start: null,
+      service_month_end: null,
+      can_start: null,
+      my_tasks: false
     },
     // 支持數據
     allClients: [],
@@ -123,7 +129,18 @@ export const useTaskStore = defineStore('tasks', {
           completedAt: stage.completed_at,
           delayDays: stage.delay_days,
           triggeredAt: stage.triggered_at,
-          triggeredBy: stage.triggered_by
+          triggeredBy: stage.triggered_by,
+          tasks: Array.isArray(stage.tasks) ? stage.tasks.map(task => ({
+            task_id: task.task_id,
+            task_name: task.task_name || '',
+            task_status: task.task_status || 'pending',
+            assignee_user_id: task.assignee_user_id || null,
+            assignee_name: task.assignee_name || null,  // 保留 null 以便前端判斷
+            service_name: task.service_name || null,
+            client_service_id: task.client_service_id || null,
+            service_year: task.service_year || null,
+            service_month: task.service_month || null
+          })) : []
         }))
         this.currentTaskStages = stages
         return response

@@ -38,12 +38,12 @@
       <a-alert
         type="info"
         message="提示"
-        description="附件會自動關聯到相關的任務、客戶或收據。如果沒有關聯，將作為獨立附件保存。"
+        description="附件將自動關聯到當前篩選的任務、客戶或服務，否則將作為獨立附件儲存"
         show-icon
         style="margin-bottom: 24px"
       />
 
-      <!-- 文件 -->
+      <!-- 文件上傳 -->
       <a-form-item label="選擇文件" name="file">
         <a-upload
           v-model:file-list="fileList"
@@ -79,7 +79,7 @@
       <a-form-item label="標題" name="title">
         <a-input
           v-model:value="formData.title"
-          placeholder="留空則使用檔名（可選）"
+          placeholder="留空則使用文件名"
           :maxlength="200"
           show-count
         />
@@ -187,14 +187,14 @@ const acceptedFileTypes = 'application/pdf,application/msword,application/vnd.op
 
 // 文件上傳前驗證
 const beforeUpload = (file) => {
-  // 文件大小限制（25MB）
+  // 文件大小限制 25MB
   const maxSize = 25 * 1024 * 1024
   if (file.size > maxSize) {
     showError('文件大小不能超過 25MB')
     return false
   }
 
-  // 返回 true 允許文件添加到列表，但使用 customRequest 控制上傳
+  // 返回 true 允許文件添加到 fileList，但使用 customRequest 控制上傳
   // 文件添加後觸發表單驗證
   setTimeout(() => {
     if (formRef.value) {
@@ -207,17 +207,17 @@ const beforeUpload = (file) => {
   return true
 }
 
-// 自定義上傳請求（阻止自動上傳）
+// 自定義上傳請求，阻止自動上傳
 const handleCustomRequest = (options) => {
   // 不執行任何操作，文件已經添加到 fileList
-  // 實際的上傳將在表單提交時進行
+  // 實際的上傳在表單提交時進行
   const { onSuccess } = options
   if (onSuccess) {
     onSuccess('ok')
   }
 }
 
-// 處理拖拽放下
+// 處理拖拽事件
 const handleDrop = (e) => {
   e.preventDefault()
   e.stopPropagation()
@@ -280,7 +280,7 @@ const handleSubmit = async () => {
       return
     }
     
-    // Ant Design Vue 4.x 中，文件對象可能在多個位置
+    // Ant Design Vue 4.x 中的文件對象可能在不同屬性中
     let file = null
     if (fileItem.originFileObj) {
       file = fileItem.originFileObj
@@ -304,7 +304,7 @@ const handleSubmit = async () => {
     const formDataToSend = new FormData()
     formDataToSend.append('file', file)
     
-    // 如果標題為空，使用檔名
+    // 如果標題為空，使用文件名
     const title = formData.value.title.trim() || file.name
     formDataToSend.append('title', title)
 
@@ -313,7 +313,7 @@ const handleSubmit = async () => {
     }
 
     // 調試：檢查 FormData 內容
-    console.log('準備上傳附件:', {
+    console.log('準備上傳文件:', {
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
@@ -331,13 +331,13 @@ const handleSubmit = async () => {
 
     // 上傳
     try {
-    const response = await knowledgeStore.uploadAttachment(formDataToSend, onProgress)
+      const response = await knowledgeStore.uploadAttachment(formDataToSend, onProgress)
       uploadProgress.value = 100
-    showSuccess('附件上傳成功')
-    
-    // 觸發成功事件
-    emit('success')
-    handleClose()
+      showSuccess('附件上傳成功')
+      
+      // 觸發成功事件
+      emit('success')
+      handleClose()
     } catch (uploadError) {
       console.error('上傳附件 Store 錯誤:', uploadError)
       throw uploadError
@@ -360,7 +360,7 @@ const handleClose = () => {
   emit('close')
 }
 
-// 監聽 visible 變化，初始化表單
+// 監聽 visible 變化，重置表單
 watch(
   () => props.visible,
   (newVal) => {
@@ -373,7 +373,7 @@ watch(
 </script>
 
 <style scoped>
-/* 優化拖拽上傳區域樣式 */
+/* 拖拽上傳區域樣式 */
 :deep(.ant-upload-drag) {
   border: 2px dashed #d9d9d9;
   border-radius: 8px;
@@ -408,61 +408,47 @@ watch(
   color: #999;
 }
 
-/* 新增的上傳觸發區域樣式 */
 .upload-trigger {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border: 1px dashed #c5c5c5;
-  border-radius: 8px;
-  background-color: #fafafa;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.upload-trigger:hover {
-  border-color: #1890ff;
-  background-color: #f0f7ff;
+  padding: 40px 20px;
 }
 
 .upload-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  background-color: #e6f4ff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  margin-bottom: 16px;
 }
 
 .upload-icon {
-  font-size: 28px;
+  font-size: 48px;
   color: #1890ff;
 }
 
 .upload-text {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  text-align: center;
+  margin-bottom: 16px;
 }
 
 .upload-title {
-  font-weight: 500;
-  color: #1f2937;
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 8px;
 }
 
 .upload-hint {
-  font-size: 12px;
-  color: #707070;
+  font-size: 14px;
+  color: #999;
 }
 
 .upload-file-name {
-  margin-top: 12px;
+  margin-top: 16px;
+  padding: 8px 16px;
+  background-color: #f0f7ff;
+  border-radius: 4px;
   display: flex;
   align-items: center;
-  font-size: 13px;
-  color: #1f2937;
-  word-break: break-all;
+  justify-content: center;
+  color: #1890ff;
+  font-size: 14px;
 }
 </style>
-

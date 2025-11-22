@@ -2,6 +2,8 @@
  * 薪資快取與重算佇列工具
  */
 
+import { invalidateCacheByDataType, extractYearFromDate } from "./cache-invalidation.js";
+
 /**
  * 將薪資計算結果寫入快取
  * @param {object} env
@@ -83,6 +85,14 @@ export async function upsertPayrollCache(env, userId, month, payrollData) {
     payrollData.isFullAttendance ? 1 : 0,
     dataJson
   ).run();
+
+  // 失效相關年度報表快取
+  const year = extractYearFromDate(month);
+  if (year) {
+    await invalidateCacheByDataType(env, "payroll", year).catch((err) => {
+      console.warn("[PayrollCache] 失效快取失敗:", err);
+    });
+  }
 }
 
 /**

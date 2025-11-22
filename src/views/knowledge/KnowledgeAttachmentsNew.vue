@@ -184,10 +184,7 @@
 
             <!-- 預覽區域 -->
             <div class="preview-area">
-              <div class="file-icon">
-                <FileOutlined style="font-size: 64px; color: #1890ff" />
-              </div>
-              <p class="preview-tip">點擊下載按鈕下載此附件</p>
+              <AttachmentPreview :attachment="currentAttachment" />
             </div>
           </div>
           
@@ -208,6 +205,7 @@ import { storeToRefs } from 'pinia'
 import { usePageAlert } from '@/composables/usePageAlert'
 import { FileOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons-vue'
 import { h } from 'vue'
+import AttachmentPreview from '@/components/knowledge/AttachmentPreview.vue'
 
 // Store
 const knowledgeStore = useKnowledgeStore()

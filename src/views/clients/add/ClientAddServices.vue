@@ -66,7 +66,7 @@
       <TaskConfiguration
         v-model:tasks="configuringService.tasks"
         v-model:sops="configuringService.service_sops"
-        :service-id="configuringService.service_id"
+        :service-id="actualServiceId"
         :is-new-client="true"
       />
     </a-card>
@@ -84,10 +84,33 @@
       </a-button>
     </div>
 
+    <!-- 任務生成進度 Modal -->
+    <a-modal
+      v-model:open="generationModalVisible"
+      title="正在生成任務"
+      :footer="null"
+      :closable="false"
+      :mask-closable="false"
+    >
+      <div style="text-align: center; padding: 24px;">
+        <a-spin size="large" />
+        <p style="margin-top: 16px; color: #6b7280;">
+          {{ generationStatus }}
+        </p>
+        <a-progress
+          v-if="generationProgress >= 0"
+          :percent="generationProgress"
+          :status="generationProgress === 100 ? 'success' : 'active'"
+          style="margin-top: 16px;"
+        />
+      </div>
+    </a-modal>
+
     <!-- 新增服務 Modal -->
     <AddServiceModal
       v-model:visible="isModalVisible"
       @service-selected="handleServiceSelected"
+      @generate-tasks="handleGenerateTasksEvent"
     />
 
     <!-- 收費計劃建立提示 Modal -->
@@ -100,17 +123,34 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useClientAddStore } from '@/stores/clientAdd'
 import { usePageAlert } from '@/composables/usePageAlert'
+import { useTaskApi } from '@/api/tasks'
 import AddServiceModal from '@/components/clients/AddServiceModal.vue'
 import TaskConfiguration from '@/components/clients/TaskConfiguration.vue'
 import CreateBillingPromptModal from '@/components/clients/CreateBillingPromptModal.vue'
 
 const router = useRouter()
 const store = useClientAddStore()
-const { successMessage, errorMessage, showSuccess, showError } = usePageAlert()
+const { successMessage, errorMessage, showSuccess, showError, showWarning } = usePageAlert()
+const taskApi = useTaskApi()
+
+// 任務生成相關狀態
+const generationModalVisible = ref(false)
+const generationStatus = ref('正在生成任務...')
+const generationProgress = ref(-1)
+
+// 確保支持數據已載入
+onMounted(async () => {
+  // 強制載入支持數據，確保服務列表可用
+  try {
+    await store.fetchSupportData()
+  } catch (error) {
+    console.error('載入支持數據失敗:', error)
+  }
+})
 
 // Modal 顯示狀態
 const isModalVisible = ref(false)
@@ -118,6 +158,29 @@ const billingPromptVisible = ref(false)
 
 // 當前正在配置的服務
 const configuringService = ref(null)
+
+// 計算實際的服務ID（確保不是臨時ID）
+const actualServiceId = computed(() => {
+  if (!configuringService.value) return null
+  const serviceId = configuringService.value.service_id
+  // 如果 service_id 是臨時ID，嘗試從 store.supportData.services 中查找真正的服務ID
+  if (!serviceId || String(serviceId).startsWith('temp_')) {
+    const serviceName = configuringService.value.name
+    console.log('[ClientAddServices] 查找真正的服務ID，serviceName:', serviceName, 'store.services:', store.supportData.services)
+    const masterService = store.supportData.services.find(s => {
+      const sName = s.name || s.service_name
+      return sName === serviceName
+    })
+    if (masterService) {
+      const realServiceId = masterService.service_id || masterService.id
+      console.log('[ClientAddServices] 找到真正的服務ID:', realServiceId, 'masterService:', masterService)
+      return realServiceId
+    }
+    console.warn('[ClientAddServices] 無法找到真正的服務ID，service:', configuringService.value, 'available services:', store.supportData.services.map(s => ({ name: s.name || s.service_name, service_id: s.service_id || s.id })))
+    return null
+  }
+  return serviceId
+})
 
 // 表格列定義
 const columns = [
@@ -162,7 +225,15 @@ const handleServiceSelected = (newService) => {
 
 // 處理配置服務
 const handleConfigureService = (service) => {
+  console.log('[ClientAddServices] handleConfigureService - service:', service)
+  console.log('[ClientAddServices] service.service_id:', service.service_id)
   configuringService.value = service
+  
+  // 等待下一個 tick 後檢查 actualServiceId
+  nextTick(() => {
+    console.log('[ClientAddServices] actualServiceId computed value:', actualServiceId.value)
+    console.log('[ClientAddServices] configuringService.value.service_id:', configuringService.value?.service_id)
+  })
   
   // 滾動到配置區域
   setTimeout(() => {
@@ -203,6 +274,21 @@ const handleSave = async () => {
     // 保存服務設定
     await store.saveServices()
     
+    // 檢查是否有一次性服務需要生成任務
+    const oneTimeServices = store.tempServices.filter(s => 
+      s.service_type === 'one-time' && 
+      s.client_service_id && 
+      s.tasks && 
+      s.tasks.length > 0
+    )
+    
+    // 為每個一次性服務生成任務
+    if (oneTimeServices.length > 0) {
+      for (const service of oneTimeServices) {
+        await handleGenerateTasksForService(service.client_service_id, service.name)
+      }
+    }
+    
     // 檢查是否有定期服務需要建立收費計劃
     const recurringServices = store.tempServices.filter(s => s.service_type === 'recurring')
     if (recurringServices.length > 0) {
@@ -215,6 +301,69 @@ const handleSave = async () => {
     // 保存成功後，可以選擇繼續編輯其他分頁或離開
   } catch (error) {
     showError(error.message || '保存失敗')
+  }
+}
+
+// 處理任務生成（一次性服務）
+const handleGenerateTasksForService = async (clientServiceId, serviceName) => {
+  try {
+    // 顯示生成進度 Modal
+    generationModalVisible.value = true
+    generationStatus.value = `正在為服務「${serviceName}」生成任務...`
+    generationProgress.value = 0
+
+    // 計算服務月份（使用當前月份）
+    const now = new Date()
+    const serviceMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+    // 更新進度
+    generationProgress.value = 30
+    generationStatus.value = '正在調用任務生成 API...'
+
+    // 調用任務生成 API
+    const result = await taskApi.generateTasksForOneTimeService(clientServiceId, serviceMonth)
+
+    // 更新進度
+    generationProgress.value = 100
+    generationStatus.value = `任務生成完成！已生成 ${result.generated || 0} 個任務`
+
+    // 顯示成功消息
+    if (result.generated > 0) {
+      showSuccess(`服務「${serviceName}」任務生成成功！已生成 ${result.generated} 個任務`)
+    } else if (result.skipped > 0) {
+      showWarning(`服務「${serviceName}」任務已存在，跳過 ${result.skipped} 個任務`)
+    } else {
+      showWarning(`服務「${serviceName}」沒有生成新任務`)
+    }
+
+    // 如果有錯誤，顯示警告
+    if (result.errors && result.errors.length > 0) {
+      console.warn('任務生成部分失敗:', result.errors)
+      showWarning(`服務「${serviceName}」部分任務生成失敗：${result.errors.length} 個錯誤`)
+    }
+
+    // 延遲後關閉 Modal
+    setTimeout(() => {
+      generationModalVisible.value = false
+    }, 2000)
+  } catch (error) {
+    console.error('任務生成失敗:', error)
+    generationModalVisible.value = false
+    showError(`服務「${serviceName}」任務生成失敗：${error.message || '請稍後重試'}`)
+  } finally {
+    generationProgress.value = -1
+    generationStatus.value = '正在生成任務...'
+  }
+}
+
+// 處理 AddServiceModal 的任務生成事件
+const handleGenerateTasksEvent = (event) => {
+  if (event.success) {
+    // 任務生成成功，已在 AddServiceModal 中顯示消息
+    console.log('任務生成成功:', event.result)
+  } else {
+    // 任務生成失敗，已在 AddServiceModal 中顯示錯誤
+    console.error('任務生成失敗:', event.error)
   }
 }
 

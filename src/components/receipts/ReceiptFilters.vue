@@ -46,6 +46,64 @@
         <a-select-option value="prepayment">預收款</a-select-option>
         <a-select-option value="deposit">押金</a-select-option>
       </a-select>
+
+      <!-- 客戶篩選下拉 -->
+      <a-select
+        v-model:value="localFilters.client_id"
+        placeholder="全部客戶"
+        style="width: 200px"
+        show-search
+        option-filter-prop="children"
+        @change="handleFiltersChange"
+      >
+        <a-select-option value="">全部客戶</a-select-option>
+        <a-select-option
+          v-for="client in clients"
+          :key="client.client_id"
+          :value="client.client_id"
+        >
+          {{ client.company_name }} ({{ client.tax_registration_number }})
+        </a-select-option>
+      </a-select>
+
+      <!-- 收費月份下拉 -->
+      <a-select
+        v-model:value="localFilters.billing_month"
+        placeholder="全部月份"
+        style="width: 120px"
+        @change="handleFiltersChange"
+      >
+        <a-select-option :value="null">全部月份</a-select-option>
+        <a-select-option value="1">1月</a-select-option>
+        <a-select-option value="2">2月</a-select-option>
+        <a-select-option value="3">3月</a-select-option>
+        <a-select-option value="4">4月</a-select-option>
+        <a-select-option value="5">5月</a-select-option>
+        <a-select-option value="6">6月</a-select-option>
+        <a-select-option value="7">7月</a-select-option>
+        <a-select-option value="8">8月</a-select-option>
+        <a-select-option value="9">9月</a-select-option>
+        <a-select-option value="10">10月</a-select-option>
+        <a-select-option value="11">11月</a-select-option>
+        <a-select-option value="12">12月</a-select-option>
+      </a-select>
+
+      <!-- 收費年度下拉 -->
+      <a-select
+        v-model:value="localFilters.billing_year"
+        placeholder="全部年度"
+        style="width: 120px"
+        @change="handleFiltersChange"
+      >
+        <a-select-option :value="null">全部年度</a-select-option>
+        <a-select-option
+          v-for="year in yearOptions"
+          :key="year"
+          :value="year"
+        >
+          {{ year }}年
+        </a-select-option>
+      </a-select>
     </a-col>
     
     <a-col>
@@ -67,8 +125,15 @@ const props = defineProps({
       status: 'all',
       receipt_type: 'all',
       dateFrom: '',
-      dateTo: ''
+      dateTo: '',
+      client_id: '',
+      billing_month: null,
+      billing_year: null
     })
+  },
+  clients: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -88,6 +153,16 @@ const dateRange = computed({
   set: (val) => {
     // 這個 setter 不會被直接使用，因為我們使用 @change 事件
   }
+})
+
+// 年度選項（最近5年）
+const yearOptions = computed(() => {
+  const currentYear = new Date().getFullYear()
+  const years = []
+  for (let i = currentYear + 1; i >= currentYear - 4; i--) {
+    years.push(i)
+  }
+  return years
 })
 
 // 同步 props 變化
@@ -117,6 +192,10 @@ const handleAddReceipt = () => {
   emit('add-receipt')
 }
 </script>
+
+
+
+
 
 
 

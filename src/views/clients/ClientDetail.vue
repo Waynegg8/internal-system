@@ -83,12 +83,17 @@ watch(
   { immediate: true }
 )
 
-// 加載客戶詳情
-const loadClientDetail = async () => {
+// 加載客戶詳情（帶性能優化）
+const loadClientDetail = async (forceRefresh = false) => {
   const clientId = route.params.id
   if (clientId) {
     try {
-      await clientStore.fetchClientDetail(clientId)
+      // 使用 forceRefresh 參數控制是否強制刷新
+      // 當客戶 ID 變化時強制刷新，否則重用緩存
+      await clientStore.fetchClientDetail(clientId, { 
+        forceRefresh,
+        skipCache: false // 允許重用進行中的請求
+      })
     } catch (err) {
       console.error('載入客戶詳情失敗:', err)
     }
@@ -97,7 +102,10 @@ const loadClientDetail = async () => {
 
 // 組件掛載時獲取客戶詳情
 onMounted(() => {
-  loadClientDetail()
+  const clientId = route.params.id
+  // 如果已經有相同客戶的數據，不需要重新載入
+  const isLoaded = clientStore.isCurrentClientLoaded(clientId)
+  loadClientDetail(!isLoaded)
 })
 
 // 監聽路由參數變化，當客戶 ID 變化時重新加載
@@ -105,7 +113,8 @@ watch(
   () => route.params.id,
   (newId, oldId) => {
     if (newId && newId !== oldId) {
-      loadClientDetail()
+      // 客戶 ID 變化時強制刷新
+      loadClientDetail(true)
     }
   }
 )

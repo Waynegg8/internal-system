@@ -63,7 +63,6 @@
                 placeholder="選擇日期"
                 style="width: 100%"
                 format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
                 @change="handleChange"
               />
             </a-form-item>
@@ -75,7 +74,6 @@
                 placeholder="選擇日期"
                 style="width: 100%"
                 format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
                 @change="handleChange"
               />
             </a-form-item>
@@ -160,13 +158,19 @@ const handleChange = () => {
   })
 
   // 轉換為 JSON 格式
-  const result = validItems.length > 0 ? validItems.map(item => ({
-    name: item.name || '',
-    position: item.position || '',
-    term_start: item.term_start ? item.term_start.format('YYYY-MM-DD') : null,
-    term_end: item.term_end ? item.term_end.format('YYYY-MM-DD') : null,
-    is_current: item.is_current !== undefined ? item.is_current : true
-  })) : null
+  const result = validItems.length > 0 ? validItems.map(item => {
+    // 確保 term_start 和 term_end 是 dayjs 對象
+    const termStart = item.term_start ? (typeof item.term_start === 'string' ? dayjs(item.term_start) : item.term_start) : null
+    const termEnd = item.term_end ? (typeof item.term_end === 'string' ? dayjs(item.term_end) : item.term_end) : null
+    
+    return {
+      name: item.name || '',
+      position: item.position || '',
+      term_start: termStart ? termStart.format('YYYY-MM-DD') : null,
+      term_end: termEnd ? termEnd.format('YYYY-MM-DD') : null,
+      is_current: item.is_current !== undefined ? item.is_current : true
+    }
+  }) : null
 
   emit('update:modelValue', result)
 }
@@ -177,4 +181,10 @@ const handleChange = () => {
   width: 100%;
 }
 </style>
+
+
+
+
+
+
 

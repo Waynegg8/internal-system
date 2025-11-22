@@ -1,154 +1,158 @@
 <template>
-  <a-table
-    :columns="columns"
-    :data-source="costs"
-    :loading="loading"
-    :row-key="getRowKey"
-    :pagination="false"
-    class="responsive-table"
-    size="small"
-  >
-    <template #bodyCell="{ column, record }">
-      <!-- 項目名稱 -->
-      <template v-if="column.key === 'costName'">
-        {{ getCostName(record) }}
+  <div class="overhead-costs-table">
+    <a-table
+      :columns="columns"
+      :data-source="costs"
+      :pagination="pagination"
+      :loading="loading"
+      :scroll="{ x: 800 }"
+      size="small"
+      @change="handleTableChange"
+    >
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'amount'">
+          {{ formatCurrency(record.amount) }}
+        </template>
+        <template v-if="column.key === 'costTypeName'">
+          <a-tag :color="getAllocationMethodColor(record.allocation_method)">
+            {{ record.costTypeName || record.cost_name }}
+          </a-tag>
+        </template>
+        <template v-if="column.key === 'allocationMethod'">
+          {{ getAllocationMethodName(record.allocation_method) }}
+        </template>
+        <template v-if="column.key === 'actions'">
+          <a-space>
+            <a-button
+              type="link"
+              size="small"
+              @click="handleEdit(record)"
+            >
+              編輯
+            </a-button>
+            <a-button
+              type="link"
+              size="small"
+              danger
+              @click="handleDelete(record)"
+            >
+              刪除
+            </a-button>
+          </a-space>
+        </template>
       </template>
-      
-      <!-- 金額 -->
-      <template v-else-if="column.key === 'amount'">
-        <span class="table-cell-amount">
-          {{ formatCurrency(getAmount(record)) }}
-        </span>
-      </template>
-      
-      <!-- 備註 -->
-      <template v-else-if="column.key === 'notes'">
-        {{ getNotes(record) || '—' }}
-      </template>
-      
-      <!-- 錄入人 -->
-      <template v-else-if="column.key === 'createdBy'">
-        {{ getCreatedBy(record) || '—' }}
-      </template>
-      
-      <!-- 操作 -->
-      <template v-else-if="column.key === 'action'">
-        <a-button type="link" size="small" @click="handleEdit(record)">
-          編輯
-        </a-button>
-        <a-button type="link" size="small" danger @click="handleDelete(record)">刪除</a-button>
-      </template>
-    </template>
-    
-    <template #emptyText>
-      <a-empty description="尚無資料" />
-    </template>
-  </a-table>
+    </a-table>
+  </div>
 </template>
 
 <script setup>
-import { formatCurrency } from '@/utils/formatters'
+import { computed } from 'vue'
 
+// Props
 const props = defineProps({
   costs: {
+    type: Array,
+    default: () => []
+  },
+  costTypes: {
     type: Array,
     default: () => []
   },
   loading: {
     type: Boolean,
     default: false
+  },
+  pagination: {
+    type: Object,
+    default: () => ({
+      current: 1,
+      pageSize: 10,
+      total: 0,
+      showSizeChanger: true,
+      showQuickJumper: true,
+      showTotal: (total, range) => `第 ${range[0]}-${range[1]} 條，共 ${total} 條`
+    })
   }
 })
 
-const emit = defineEmits(['edit', 'delete'])
+// Emits
+const emit = defineEmits(['edit', 'delete', 'change'])
 
-// 表格列定義 - 优化列宽，避免水平滚动
+// Table columns
 const columns = [
   {
-    title: '項目名稱',
-    key: 'costName',
-    dataIndex: 'costName',
-    width: '25%',
-    minWidth: 150,
-    ellipsis: {
-      showTitle: true
-    }
+    title: '成本項目',
+    dataIndex: 'costTypeName',
+    key: 'costTypeName',
+    width: 200,
+    ellipsis: true
+  },
+  {
+    title: '分攤方式',
+    dataIndex: 'allocationMethod',
+    key: 'allocationMethod',
+    width: 150
   },
   {
     title: '金額',
+    dataIndex: 'amount',
     key: 'amount',
-    width: 110,
+    width: 120,
     align: 'right'
   },
   {
-    title: '備註',
-    key: 'notes',
-    width: '30%',
-    minWidth: 150,
-    ellipsis: {
-      showTitle: true
-    },
-    responsive: ['lg']
-  },
-  {
-    title: '錄入人',
-    key: 'createdBy',
-    width: 100,
-    ellipsis: {
-      showTitle: true
-    },
-    responsive: ['lg']
-  },
-  {
     title: '操作',
-    key: 'action',
+    key: 'actions',
     width: 120,
-    align: 'center'
+    align: 'center',
+    fixed: 'right'
   }
 ]
 
-// 獲取行鍵
-const getRowKey = (record) => {
-  return record.id || record.costId || record.cost_id || record.overheadCostId
+// Methods
+const formatCurrency = (value) => {
+  if (value === null || value === undefined) return '0'
+  return new Intl.NumberFormat('zh-TW', {
+    style: 'currency',
+    currency: 'TWD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(value)
 }
 
-// 獲取項目名稱
-const getCostName = (record) => {
-  return record.costName || record.cost_name || record.costTypeName || record.cost_type_name || '—'
+const getAllocationMethodName = (method) => {
+  const methodNames = {
+    per_employee: '按員工數分攤',
+    per_hour: '按工時分攤',
+    per_revenue: '按收入分攤'
+  }
+  return methodNames[method] || method
 }
 
-// 獲取金額
-const getAmount = (record) => {
-  return record.amount || 0
+const getAllocationMethodColor = (method) => {
+  const colors = {
+    per_employee: 'blue',
+    per_hour: 'green',
+    per_revenue: 'orange'
+  }
+  return colors[method] || 'default'
 }
 
-// 獲取備註
-const getNotes = (record) => {
-  return record.notes || ''
-}
-
-// 獲取錄入人
-const getCreatedBy = (record) => {
-  return (
-    record.recordedBy ||
-    record.recorded_by ||
-    record.createdBy ||
-    record.created_by ||
-    record.creatorName ||
-    record.creator_name ||
-    ''
-  )
-}
-
-// 處理編輯
 const handleEdit = (record) => {
   emit('edit', record)
 }
 
-// 處理刪除
 const handleDelete = (record) => {
-  const costId = record.id || record.costId || record.cost_id || record.overheadCostId
-  emit('delete', costId)
+  emit('delete', record)
+}
+
+const handleTableChange = (pagination, filters, sorter) => {
+  emit('change', { pagination, filters, sorter })
 }
 </script>
 
+<style scoped>
+.overhead-costs-table {
+  width: 100%;
+}
+</style>

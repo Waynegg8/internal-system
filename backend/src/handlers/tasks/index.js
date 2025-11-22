@@ -11,6 +11,7 @@ import {
   handleCreateTask,
   handleUpdateTask,
   handleDeleteTask,
+  handleGetDefaultDateRange,
 } from "./task-crud.js";
 import { handleGetTaskSOPs, handleUpdateTaskSOPs } from "./task-sops.js";
 import {
@@ -23,8 +24,11 @@ import {
   handleGetTaskDocuments,
   handleUploadTaskDocument,
   handleDeleteTaskDocument,
+  handleDownloadTaskDocument,
 } from "./task-documents.js";
 import { handleGetTaskAdjustmentHistory } from "./task-history.js";
+import { handleGetTasksStats } from "./task-stats.js";
+import { handleBatchUpdateTasks } from "./task-batch.js";
 
 export async function handleTasks(request, env, ctx, requestId, match, url) {
   const method = request.method.toUpperCase();
@@ -44,6 +48,14 @@ export async function handleTasks(request, env, ctx, requestId, match, url) {
     // POST /api/v2/tasks/:id/documents - 上传任务文档
     if (method === "POST" && path.endsWith('/documents') && match && match[1] && !match[2]) {
       return await handleUploadTaskDocument(request, env, ctx, requestId, match, url);
+    }
+    
+    // GET /api/v2/tasks/:id/documents/:documentId/download - 下载任务文档
+    if (method === "GET" && path.endsWith('/download')) {
+      const downloadMatch = path.match(/^\/api\/v2\/tasks\/(\d+)\/documents\/(\d+)\/download$/);
+      if (downloadMatch) {
+        return await handleDownloadTaskDocument(request, env, ctx, requestId, downloadMatch, url);
+      }
     }
     
     // DELETE /api/v2/tasks/:id/documents/:documentId - 删除任务文档
@@ -79,6 +91,21 @@ export async function handleTasks(request, env, ctx, requestId, match, url) {
     // PUT /api/v2/tasks/:id/sops - 更新任务关联的SOP
     if (method === "PUT" && path.endsWith('/sops') && match && match[1]) {
       return await handleUpdateTaskSOPs(request, env, ctx, requestId, match, url);
+    }
+    
+    // POST /api/v2/tasks/batch - 批量操作任務
+    if (method === "POST" && path === '/api/v2/tasks/batch') {
+      return await handleBatchUpdateTasks(request, env, ctx, requestId, url);
+    }
+    
+    // GET /api/v2/tasks/stats - 任务统计摘要
+    if (method === "GET" && path === '/api/v2/tasks/stats') {
+      return await handleGetTasksStats(request, env, ctx, requestId, url);
+    }
+    
+    // GET /api/v2/tasks/default-date-range - 獲取預設日期範圍
+    if (method === "GET" && path === '/api/v2/tasks/default-date-range') {
+      return await handleGetDefaultDateRange(request, env, ctx, requestId, url);
     }
     
     // GET /api/v2/tasks/overview - 任务总览

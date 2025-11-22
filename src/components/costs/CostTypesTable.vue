@@ -9,8 +9,13 @@
     size="small"
   >
     <template #bodyCell="{ column, record }">
+      <!-- 成本代碼 -->
+      <template v-if="column.key === 'costCode'">
+        <span class="cost-code">{{ getCostCode(record) }}</span>
+      </template>
+
       <!-- 成本名稱 -->
-      <template v-if="column.key === 'costName'">
+      <template v-else-if="column.key === 'costName'">
         {{ getCostName(record) }}
       </template>
       
@@ -81,10 +86,19 @@ const emit = defineEmits(['edit', 'template', 'remove'])
 // 表格列定義 - 优化列宽，避免水平滚动
 const columns = [
   {
+    title: '成本代碼',
+    key: 'costCode',
+    dataIndex: 'costCode',
+    width: 120,
+    ellipsis: {
+      showTitle: true
+    }
+  },
+  {
     title: '成本名稱',
     key: 'costName',
     dataIndex: 'costName',
-    width: '28%',
+    width: '25%',
     minWidth: 150,
     ellipsis: {
       showTitle: true
@@ -126,6 +140,11 @@ const columns = [
 // 獲取行鍵
 const getRowKey = (record) => {
   return record.id || record.costTypeId || record.cost_type_id || record.costType_id
+}
+
+// 獲取成本代碼
+const getCostCode = (record) => {
+  return record.costCode || record.cost_code || record.code || ''
 }
 
 // 獲取成本名稱
@@ -192,6 +211,12 @@ const handleRemove = (record) => {
   padding: 0;
   height: auto;
   text-align: left;
+}
+
+.cost-code {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
+  font-weight: 500;
+  color: #1890ff;
 }
 </style>
 

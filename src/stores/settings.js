@@ -8,6 +8,11 @@ export const useSettingsStore = defineStore('settings', {
     serviceSOPs: [],
     taskTemplates: [],
     templateStages: {}, // 緩存各模板的任務階段列表（key: templateId, value: stages 數組）
+    taskTemplateFilters: { // 任務模板搜索和過濾條件
+      search: '', // 搜索關鍵詞（模板名稱、服務名稱、客戶名稱）
+      service_id: null, // 服務 ID 過濾
+      client_type: null // 客戶類型過濾：'unified' 表示統一模板，'specific' 表示客戶專屬
+    },
     supportData: { // 支持數據（服務、客戶、SOP、資源文檔）
       services: [],
       clients: [],
@@ -142,11 +147,16 @@ export const useSettingsStore = defineStore('settings', {
     },
     
     // 獲取任務模板
-    async getTaskTemplates() {
+    async getTaskTemplates(options = {}) {
       this.loading = true
       this.error = null
       try {
-        const response = await useSettingsApi().getTaskTemplates()
+        // 如果 options 為空，使用 store 中的過濾條件
+        const queryOptions = Object.keys(options).length > 0 
+          ? options 
+          : this.buildTaskTemplateQueryOptions()
+        
+        const response = await useSettingsApi().getTaskTemplates(queryOptions)
         // 處理多種 API 響應格式
         this.taskTemplates = extractApiArray(response, [])
         return response
@@ -155,6 +165,65 @@ export const useSettingsStore = defineStore('settings', {
         throw error
       } finally {
         this.loading = false
+      }
+    },
+    
+    // 構建任務模板查詢選項（從 store 的過濾條件構建）
+    buildTaskTemplateQueryOptions() {
+      const options = {}
+      
+      // 搜索關鍵詞
+      if (this.taskTemplateFilters.search && this.taskTemplateFilters.search.trim()) {
+        options.search = this.taskTemplateFilters.search.trim()
+      }
+      
+      // 服務 ID 過濾
+      if (this.taskTemplateFilters.service_id !== null && this.taskTemplateFilters.service_id !== undefined) {
+        options.service_id = this.taskTemplateFilters.service_id
+      }
+      
+      // 客戶類型過濾
+      if (this.taskTemplateFilters.client_type) {
+        options.client_type = this.taskTemplateFilters.client_type
+      }
+      
+      return options
+    },
+    
+    // 設置任務模板搜索關鍵詞
+    setTaskTemplateSearch(search) {
+      this.taskTemplateFilters.search = search || ''
+    },
+    
+    // 設置任務模板服務 ID 過濾
+    setTaskTemplateServiceId(serviceId) {
+      this.taskTemplateFilters.service_id = serviceId !== undefined && serviceId !== null ? serviceId : null
+    },
+    
+    // 設置任務模板客戶類型過濾
+    setTaskTemplateClientType(clientType) {
+      this.taskTemplateFilters.client_type = clientType || null
+    },
+    
+    // 重置任務模板過濾條件
+    resetTaskTemplateFilters() {
+      this.taskTemplateFilters = {
+        search: '',
+        service_id: null,
+        client_type: null
+      }
+    },
+    
+    // 更新任務模板過濾條件（批量更新）
+    updateTaskTemplateFilters(filters) {
+      if (filters.search !== undefined) {
+        this.taskTemplateFilters.search = filters.search || ''
+      }
+      if (filters.service_id !== undefined) {
+        this.taskTemplateFilters.service_id = filters.service_id !== null && filters.service_id !== undefined ? filters.service_id : null
+      }
+      if (filters.client_type !== undefined) {
+        this.taskTemplateFilters.client_type = filters.client_type || null
       }
     },
     

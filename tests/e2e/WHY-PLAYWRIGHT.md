@@ -171,3 +171,9 @@ for (const client of clients) {
 **手動測試就像每次都要重新寫程式碼，Playwright 就像寫一次程式碼，之後自動執行。**
 
 
+
+
+
+
+
+

@@ -4,7 +4,8 @@ import { useReportsApi } from '@/api/reports'
 export const useReportsStore = defineStore('reports', {
   state: () => ({
     loading: false,
-    error: null,
+    error: null, // 簡要錯誤訊息（用於顯示）
+    errorDetails: null, // 完整錯誤資訊（包括堆疊）
     monthlyRevenue: null,
     monthlyPayroll: null,
     monthlyEmployeePerformance: null,
@@ -70,11 +71,13 @@ export const useReportsStore = defineStore('reports', {
      * 載入月度薪資報表
      * @param {number} year - 年份
      * @param {number} month - 月份 (1-12)
+     * @param {Object} options - 選項參數
+     * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
      */
-    async fetchMonthlyPayroll(year, month) {
+    async fetchMonthlyPayroll(year, month, options = {}) {
       this.error = null
       try {
-        const response = await useReportsApi().fetchMonthlyPayroll(year, month)
+        const response = await useReportsApi().fetchMonthlyPayroll(year, month, options)
         
         if (response && response.ok) {
           this.monthlyPayroll = normalizeFieldNames(response.data)
@@ -93,11 +96,13 @@ export const useReportsStore = defineStore('reports', {
      * 載入月度員工產值報表
      * @param {number} year - 年份
      * @param {number} month - 月份 (1-12)
+     * @param {Object} options - 選項參數
+     * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
      */
-    async fetchMonthlyEmployeePerformance(year, month) {
+    async fetchMonthlyEmployeePerformance(year, month, options = {}) {
       this.error = null
       try {
-        const response = await useReportsApi().fetchMonthlyEmployeePerformance(year, month)
+        const response = await useReportsApi().fetchMonthlyEmployeePerformance(year, month, options)
         
         if (response && response.ok) {
           this.monthlyEmployeePerformance = normalizeFieldNames(response.data)
@@ -116,11 +121,13 @@ export const useReportsStore = defineStore('reports', {
      * 載入月度客戶毛利報表
      * @param {number} year - 年份
      * @param {number} month - 月份 (1-12)
+     * @param {Object} options - 選項參數
+     * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
      */
-    async fetchMonthlyClientProfitability(year, month) {
+    async fetchMonthlyClientProfitability(year, month, options = {}) {
       this.error = null
       try {
-        const response = await useReportsApi().fetchMonthlyClientProfitability(year, month)
+        const response = await useReportsApi().fetchMonthlyClientProfitability(year, month, options)
         
         if (response && response.ok) {
           this.monthlyClientProfitability = normalizeFieldNames(response.data)
@@ -170,24 +177,46 @@ export const useReportsStore = defineStore('reports', {
     /**
      * 載入年度收款報表
      * @param {number} year - 年份
+     * @param {Object} options - 選項參數
+     * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
      */
-    async fetchAnnualRevenue(year) {
+    async fetchAnnualRevenue(year, options = {}) {
       this.setReportStatus('revenue', 'loading')
       this.error = null
       try {
-        const response = await useReportsApi().fetchAnnualRevenue(year)
+        const response = await useReportsApi().fetchAnnualRevenue(year, options)
         
         if (response && response.ok) {
           this.annualRevenue = normalizeFieldNames(response.data)
           this.setReportStatus('revenue', 'success')
         } else {
-          this.error = response?.message || '載入年度收款報表失敗'
+          const errorMessage = response?.message || '載入年度收款報表失敗'
+          this.setError(errorMessage, {
+            message: errorMessage,
+            response: response ? { data: response } : null
+          })
           this.setReportStatus('revenue', 'error')
         }
         
         return response
       } catch (error) {
-        this.error = error.response?.data?.message || error.message || '載入年度收款報表失敗'
+        const errorMessage = error.response?.data?.message || error.message || '載入年度收款報表失敗'
+        const errorDetails = {
+          message: error?.message || errorMessage,
+          stack: error?.stack || null,
+          response: error?.response ? {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            data: error.response.data
+          } : null,
+          config: error?.config ? {
+            url: error.config.url,
+            method: error.config.method,
+            params: error.config.params,
+            headers: error.config.headers
+          } : null
+        }
+        this.setError(errorMessage, errorDetails)
         this.setReportStatus('revenue', 'error')
         throw error
       }
@@ -196,24 +225,46 @@ export const useReportsStore = defineStore('reports', {
     /**
      * 載入年度薪資報表
      * @param {number} year - 年份
+     * @param {Object} options - 選項參數
+     * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
      */
-    async fetchAnnualPayroll(year) {
+    async fetchAnnualPayroll(year, options = {}) {
       this.setReportStatus('payroll', 'loading')
       this.error = null
       try {
-        const response = await useReportsApi().fetchAnnualPayroll(year)
+        const response = await useReportsApi().fetchAnnualPayroll(year, options)
         
         if (response && response.ok) {
           this.annualPayroll = normalizeFieldNames(response.data)
           this.setReportStatus('payroll', 'success')
         } else {
-          this.error = response?.message || '載入年度薪資報表失敗'
+          const errorMessage = response?.message || '載入年度薪資報表失敗'
+          this.setError(errorMessage, {
+            message: errorMessage,
+            response: response ? { data: response } : null
+          })
           this.setReportStatus('payroll', 'error')
         }
         
         return response
       } catch (error) {
-        this.error = error.response?.data?.message || error.message || '載入年度薪資報表失敗'
+        const errorMessage = error.response?.data?.message || error.message || '載入年度薪資報表失敗'
+        const errorDetails = {
+          message: error?.message || errorMessage,
+          stack: error?.stack || null,
+          response: error?.response ? {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            data: error.response.data
+          } : null,
+          config: error?.config ? {
+            url: error.config.url,
+            method: error.config.method,
+            params: error.config.params,
+            headers: error.config.headers
+          } : null
+        }
+        this.setError(errorMessage, errorDetails)
         this.setReportStatus('payroll', 'error')
         throw error
       }
@@ -222,24 +273,46 @@ export const useReportsStore = defineStore('reports', {
     /**
      * 載入年度員工產值報表
      * @param {number} year - 年份
+     * @param {Object} options - 選項參數
+     * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
      */
-    async fetchAnnualEmployeePerformance(year) {
+    async fetchAnnualEmployeePerformance(year, options = {}) {
       this.setReportStatus('performance', 'loading')
       this.error = null
       try {
-        const response = await useReportsApi().fetchAnnualEmployeePerformance(year)
+        const response = await useReportsApi().fetchAnnualEmployeePerformance(year, options)
         
         if (response && response.ok) {
           this.annualEmployeePerformance = normalizeFieldNames(response.data)
           this.setReportStatus('performance', 'success')
         } else {
-          this.error = response?.message || '載入年度員工產值報表失敗'
+          const errorMessage = response?.message || '載入年度員工產值報表失敗'
+          this.setError(errorMessage, {
+            message: errorMessage,
+            response: response ? { data: response } : null
+          })
           this.setReportStatus('performance', 'error')
         }
         
         return response
       } catch (error) {
-        this.error = error.response?.data?.message || error.message || '載入年度員工產值報表失敗'
+        const errorMessage = error.response?.data?.message || error.message || '載入年度員工產值報表失敗'
+        const errorDetails = {
+          message: error?.message || errorMessage,
+          stack: error?.stack || null,
+          response: error?.response ? {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            data: error.response.data
+          } : null,
+          config: error?.config ? {
+            url: error.config.url,
+            method: error.config.method,
+            params: error.config.params,
+            headers: error.config.headers
+          } : null
+        }
+        this.setError(errorMessage, errorDetails)
         this.setReportStatus('performance', 'error')
         throw error
       }
@@ -248,24 +321,46 @@ export const useReportsStore = defineStore('reports', {
     /**
      * 載入年度客戶毛利報表
      * @param {number} year - 年份
+     * @param {Object} options - 選項參數
+     * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
      */
-    async fetchAnnualClientProfitability(year) {
+    async fetchAnnualClientProfitability(year, options = {}) {
       this.setReportStatus('profit', 'loading')
       this.error = null
       try {
-        const response = await useReportsApi().fetchAnnualClientProfitability(year)
+        const response = await useReportsApi().fetchAnnualClientProfitability(year, options)
         
         if (response && response.ok) {
           this.annualClientProfitability = normalizeFieldNames(response.data)
           this.setReportStatus('profit', 'success')
         } else {
-          this.error = response?.message || '載入年度客戶毛利報表失敗'
+          const errorMessage = response?.message || '載入年度客戶毛利報表失敗'
+          this.setError(errorMessage, {
+            message: errorMessage,
+            response: response ? { data: response } : null
+          })
           this.setReportStatus('profit', 'error')
         }
         
         return response
       } catch (error) {
-        this.error = error.response?.data?.message || error.message || '載入年度客戶毛利報表失敗'
+        const errorMessage = error.response?.data?.message || error.message || '載入年度客戶毛利報表失敗'
+        const errorDetails = {
+          message: error?.message || errorMessage,
+          stack: error?.stack || null,
+          response: error?.response ? {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            data: error.response.data
+          } : null,
+          config: error?.config ? {
+            url: error.config.url,
+            method: error.config.method,
+            params: error.config.params,
+            headers: error.config.headers
+          } : null
+        }
+        this.setError(errorMessage, errorDetails)
         this.setReportStatus('profit', 'error')
         throw error
       }
@@ -299,6 +394,17 @@ export const useReportsStore = defineStore('reports', {
      */
     clearError() {
       this.error = null
+      this.errorDetails = null
+    },
+
+    /**
+     * 設置錯誤資訊
+     * @param {string} message - 簡要錯誤訊息
+     * @param {Object} details - 完整錯誤資訊（可選）
+     */
+    setError(message, details = null) {
+      this.error = message
+      this.errorDetails = details
     }
   }
 })

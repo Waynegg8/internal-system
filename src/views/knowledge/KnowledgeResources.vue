@@ -8,7 +8,7 @@
       show-icon
       closable
       @close="successMessage = ''"
-      style="margin-bottom: 16px"
+      style="margin-bottom: 16px; flex-shrink: 0"
     />
 
     <!-- 錯誤提示 -->
@@ -19,7 +19,7 @@
       show-icon
       closable
       @close="errorMessage = ''"
-      style="margin-bottom: 16px"
+      style="margin-bottom: 16px; flex-shrink: 0"
     />
 
     <!-- 收起狀態的展開按鈕 -->
@@ -37,16 +37,39 @@
     <a-row :gutter="8" class="resources-row">
       <!-- 左側：文檔列表 -->
       <a-col v-if="!listCollapsed" :span="listColSpan" class="document-list-col">
-        <a-card :bordered="false">
+        <a-card :bordered="false" style="height: 100%">
           <template #title>
             <div class="card-title">
               <span>文檔列表</span>
-              <a-button
-                type="text"
-                :icon="h(MenuFoldOutlined)"
-                @click="toggleListCollapse"
-              />
+              <a-space>
+                <span v-if="selectedDocumentIds.length > 0" style="color: #1890ff; font-weight: 500">
+                  已選擇 {{ selectedDocumentIds.length }} 項
+                </span>
+                <a-button
+                  type="text"
+                  :icon="h(MenuFoldOutlined)"
+                  @click="toggleListCollapse"
+                />
+              </a-space>
             </div>
+          </template>
+
+          <!-- 批量操作工具欄 -->
+          <template #extra v-if="selectedDocumentIds.length > 0">
+            <a-space>
+              <a-button 
+                danger 
+                size="small" 
+                :icon="h(DeleteOutlined)"
+                @click="handleBatchDelete"
+                :loading="documentLoading"
+              >
+                批量刪除 ({{ selectedDocumentIds.length }})
+              </a-button>
+              <a-button size="small" @click="clearSelection">
+                取消選擇
+              </a-button>
+            </a-space>
           </template>
 
           <a-spin :spinning="documentLoading">
@@ -57,11 +80,20 @@
             >
               <template #renderItem="{ item }">
                 <a-list-item
-                  :class="{ 'document-item-active': isCurrentDocument(item) }"
-                  @click="handleViewDocument(item)"
+                  :class="{ 
+                    'document-item-active': isCurrentDocument(item),
+                    'document-item-selected': isDocumentSelected(item)
+                  }"
                   class="document-list-item"
                 >
-                  <a-list-item-meta>
+                  <template #actions>
+                    <a-checkbox
+                      :checked="isDocumentSelected(item)"
+                      @change="(e) => handleDocumentSelectChange(item, e.target.checked)"
+                      @click.stop
+                    />
+                  </template>
+                  <a-list-item-meta @click="handleViewDocument(item)">
                     <template #avatar>
                       <FileOutlined style="font-size: 24px; color: #1890ff" />
                     </template>
@@ -152,7 +184,10 @@
 
           <template #extra v-if="currentDocument">
             <a-space>
-              <a-button type="primary" size="small" @click="handleDownloadDocument(currentDocument)">
+              <a-button type="primary" size="small" @click="handleEditDocument(currentDocument)" v-if="canEditDocument(currentDocument)">
+                編輯
+              </a-button>
+              <a-button size="small" @click="handleDownloadDocument(currentDocument)">
                 下載
               </a-button>
               <a-button danger size="small" @click="handleDeleteDocument(currentDocument)">
@@ -161,7 +196,7 @@
             </a-space>
           </template>
 
-          <div v-if="currentDocument" class="document-preview-wrapper">
+          <div v-if="currentDocument" class="attachment-preview-wrapper">
             <DocumentPreview :document="currentDocument" />
           </div>
 
@@ -177,6 +212,7 @@
     <!-- 文檔上傳抽屜 -->
     <DocumentUploadDrawer
       v-model:visible="drawerVisible"
+      :document-id="editingDocumentId"
       @close="handleDrawerClose"
       @success="handleDrawerSuccess"
     />
@@ -185,14 +221,17 @@
 
 <script setup>
 import { ref, computed, inject, onMounted, watch, h } from 'vue'
-import { FileOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons-vue'
+import { FileOutlined, MenuFoldOutlined, MenuUnfoldOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { useKnowledgeStore } from '@/stores/knowledge'
+import { useAuthStore } from '@/stores/auth'
 import { storeToRefs } from 'pinia'
 import { usePageAlert } from '@/composables/usePageAlert'
+import { Modal } from 'ant-design-vue'
 import DocumentUploadDrawer from '@/components/knowledge/DocumentUploadDrawer.vue'
 import DocumentPreview from '@/components/knowledge/DocumentPreview.vue'
 
 const knowledgeStore = useKnowledgeStore()
+const authStore = useAuthStore()
 const { successMessage, errorMessage, showSuccess, showError } = usePageAlert()
 const {
   documents,
@@ -207,6 +246,8 @@ const {
 const addDocumentTrigger = inject('addDocumentTrigger', ref(0))
 const listCollapsed = ref(false)
 const drawerVisible = ref(false)
+const editingDocumentId = ref(null)
+const selectedDocumentIds = ref([])
 
 const listColSpan = computed(() => (listCollapsed.value ? 0 : 8))
 const previewColSpan = computed(() => (listCollapsed.value ? 24 : 16))
@@ -335,16 +376,174 @@ const handleDeleteDocument = async (doc) => {
   }
 }
 
+// 獲取文檔上傳者 ID
+const getDocumentUploadedBy = (doc) => {
+  if (!doc) return null
+  return doc.uploaded_by || doc.uploadedBy || doc.uploader_id || doc.uploaderId || null
+}
+
+// 判斷當前使用者是否可以編輯文檔
+// 只有上傳者或管理員可以編輯
+const canEditDocument = (doc) => {
+  if (!doc || !authStore.user) return false
+  
+  const currentUserId = authStore.userId
+  const docUploadedBy = getDocumentUploadedBy(doc)
+  
+  return authStore.isAdmin || (currentUserId && String(currentUserId) === String(docUploadedBy))
+}
+
+// 處理編輯文檔
+const handleEditDocument = (doc) => {
+  const docId = getDocumentId(doc)
+  if (!docId) {
+    showError('無法獲取文檔 ID')
+    return
+  }
+  
+  // 檢查權限
+  if (!canEditDocument(doc)) {
+    showError('無權編輯此文檔')
+    return
+  }
+  
+  // 設置編輯的文檔 ID 並打開抽屜
+  editingDocumentId.value = docId
+  drawerVisible.value = true
+}
+
+// 判斷文檔是否被選中
+const isDocumentSelected = (doc) => {
+  const docId = getDocumentId(doc)
+  if (!docId) return false
+  return selectedDocumentIds.value.includes(Number(docId)) || selectedDocumentIds.value.includes(String(docId))
+}
+
+// 處理文檔選擇變化
+const handleDocumentSelectChange = (doc, checked) => {
+  const docId = getDocumentId(doc)
+  if (!docId) return
+  
+  const docIdNum = Number(docId)
+  const docIdStr = String(docId)
+  
+  if (checked) {
+    // 添加選擇
+    if (!selectedDocumentIds.value.includes(docIdNum) && !selectedDocumentIds.value.includes(docIdStr)) {
+      selectedDocumentIds.value.push(docIdNum)
+    }
+  } else {
+    // 移除選擇
+    const indexNum = selectedDocumentIds.value.indexOf(docIdNum)
+    const indexStr = selectedDocumentIds.value.indexOf(docIdStr)
+    const index = indexNum > -1 ? indexNum : indexStr
+    if (index > -1) {
+      selectedDocumentIds.value.splice(index, 1)
+    }
+  }
+}
+
+// 清除選擇
+const clearSelection = () => {
+  selectedDocumentIds.value = []
+}
+
+// 處理批量刪除
+const handleBatchDelete = () => {
+  if (selectedDocumentIds.value.length === 0) {
+    showError('請選擇要刪除的文檔')
+    return
+  }
+  
+  // 顯示確認對話框
+  Modal.confirm({
+    title: '確認批量刪除',
+    content: `確定要刪除選中的 ${selectedDocumentIds.value.length} 個文檔嗎？此操作無法復原。`,
+    okText: '確認刪除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        const result = await knowledgeStore.batchDeleteDocuments(selectedDocumentIds.value)
+        
+        // 顯示結果統計
+        const successCount = result.success_count || 0
+        const failedCount = result.failed_count || 0
+        
+        if (successCount > 0 && failedCount === 0) {
+          showSuccess(`成功刪除 ${successCount} 個文檔`)
+        } else if (successCount > 0 && failedCount > 0) {
+          const message = `部分刪除失敗：成功 ${successCount} 個，失敗 ${failedCount} 個`
+          if (result.unauthorized_ids && result.unauthorized_ids.length > 0) {
+            showError(`${message}（${result.unauthorized_ids.length} 個無權限）`)
+          } else if (result.not_found_ids && result.not_found_ids.length > 0) {
+            showError(`${message}（${result.not_found_ids.length} 個不存在）`)
+          } else {
+            showError(message)
+          }
+        } else {
+          showError('批量刪除失敗')
+        }
+        
+        // 清除選擇
+        clearSelection()
+        
+        // 重新載入列表
+        await loadDocuments()
+        
+        // 如果當前文檔被刪除，清除當前選中
+        if (currentDocument.value) {
+          const currentId = getDocumentId(currentDocument.value)
+          const currentIdNum = Number(currentId)
+          if (result.success_ids && result.success_ids.includes(currentIdNum)) {
+            knowledgeStore.setCurrentDocument(null)
+          }
+        }
+        
+        // 如果沒有當前文檔且列表有數據，設置第一個為當前文檔
+        if (!currentDocument.value && documents.value.length > 0) {
+          knowledgeStore.setCurrentDocument(documents.value[0])
+        }
+      } catch (error) {
+        console.error('批量刪除失敗:', error)
+        showError(error.message || '批量刪除失敗')
+      }
+    },
+    onCancel: () => {
+      // 取消操作，不做任何事
+    },
+  })
+}
+
 const handleDrawerClose = () => {
   drawerVisible.value = false
+  editingDocumentId.value = null
 }
 
 const handleDrawerSuccess = async (uploadedDocument) => {
-  knowledgeStore.setDocumentPagination({ page: 1 })
-  if (uploadedDocument) {
-    knowledgeStore.setCurrentDocument(uploadedDocument)
+  // 如果是編輯模式，刷新當前文檔詳情
+  if (editingDocumentId.value) {
+    const docId = editingDocumentId.value
+    editingDocumentId.value = null
+    
+    // 重新載入當前文檔詳情
+    try {
+      await knowledgeStore.fetchDocument(docId)
+    } catch (error) {
+      console.error('載入更新後的文檔詳情失敗:', error)
+    }
+  } else {
+    // 創建模式：重置分頁並設置新文檔
+    knowledgeStore.setDocumentPagination({ page: 1 })
+    if (uploadedDocument) {
+      knowledgeStore.setCurrentDocument(uploadedDocument)
+    }
   }
+  
+  // 重新載入列表
   await loadDocuments()
+  
+  // 如果沒有當前文檔且列表有數據，設置第一個為當前文檔
   if (!currentDocument.value && documents.value.length > 0) {
     knowledgeStore.setCurrentDocument(documents.value[0])
   }
@@ -390,28 +589,43 @@ watch(
     }
   }
 )
+
+// 當文檔列表變化時，清除已刪除文檔的選擇
+watch(
+  () => documents.value,
+  (newDocs, oldDocs) => {
+    if (oldDocs && selectedDocumentIds.value.length > 0) {
+      const currentDocIds = newDocs.map(doc => getDocumentId(doc))
+      selectedDocumentIds.value = selectedDocumentIds.value.filter(id => 
+        currentDocIds.includes(Number(id)) || currentDocIds.includes(String(id))
+      )
+    }
+  },
+  { deep: true }
+)
 </script>
 
 <style scoped>
 .knowledge-resources-content {
   position: relative;
-  flex: 1;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
 }
 
 .collapsed-toggle {
   position: absolute;
-  top: 16px;
+  top: 72px; /* 移到標題下方，避免遮擋 */
   left: 16px;
   z-index: 10;
 }
 
 .resources-row {
   flex: 1;
-  display: flex !important;
-  gap: 12px !important;
+  display: flex;
+  gap: 12px;
   align-items: stretch;
   min-height: 0;
 }
@@ -460,6 +674,13 @@ watch(
   color: #6b7280;
 }
 
+.document-preview-col :deep(.ant-card) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
 .document-preview-col :deep(.ant-card-body) {
   display: flex;
   flex-direction: column;
@@ -467,11 +688,12 @@ watch(
   min-height: 0;
 }
 
-.document-preview-wrapper {
+.attachment-preview-wrapper {
   flex: 1;
-  min-height: 0;
+  min-height: 1000px; /* 確保預覽區域至少有 1000px 高度 */
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* 由內部組件處理滾動 */
 }
 
 .document-preview-title {

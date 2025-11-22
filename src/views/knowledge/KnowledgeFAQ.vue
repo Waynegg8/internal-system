@@ -114,7 +114,7 @@
           
           <!-- 操作按鈕區域 -->
           <template #extra v-if="currentFAQ">
-            <a-space>
+            <a-space v-if="canEditFAQ(currentFAQ)">
               <a-button type="primary" size="small" @click="handleEditFAQ(currentFAQ)">
                 編輯
               </a-button>
@@ -150,6 +150,20 @@
               </h2>
             </div>
 
+            <!-- 建立者資訊 -->
+            <div style="margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 6px; border-left: 3px solid #1890ff">
+              <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span style="font-weight: 500; color: #666">建立者：</span>
+                  <span style="font-weight: 600; color: #1890ff">{{ getFAQCreatedByName(currentFAQ) }}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span style="font-weight: 500; color: #666">建立時間：</span>
+                  <span style="font-weight: 600">{{ getFAQCreatedAtFormatted(currentFAQ) }}</span>
+                </div>
+              </div>
+            </div>
+
             <!-- 回答標題 -->
             <div style="margin-bottom: 12px">
               <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; font-weight: 500; color: #666">
@@ -160,7 +174,7 @@
             <!-- FAQ 回答內容 -->
             <div
               class="ql-editor faq-answer"
-              v-html="getFAQAnswer(currentFAQ)"
+              v-html="renderFAQAnswer(currentFAQ)"
             ></div>
           </div>
 
@@ -187,14 +201,19 @@
 <script setup>
 import { ref, computed, inject, onMounted, watch } from 'vue'
 import { useKnowledgeStore } from '@/stores/knowledge'
+import { useAuthStore } from '@/stores/auth'
 import { storeToRefs } from 'pinia'
 import { usePageAlert } from '@/composables/usePageAlert'
+import { formatDateTime } from '@/utils/formatters'
+import { renderRichText, isHtmlContent, textToHtml } from '@/utils/richText'
 import { ExpandOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons-vue'
 import { h } from 'vue'
+import { Modal } from 'ant-design-vue'
 import FAQEditDrawer from '@/components/knowledge/FAQEditDrawer.vue'
 
 // Store
 const knowledgeStore = useKnowledgeStore()
+const authStore = useAuthStore()
 const { successMessage, errorMessage, showSuccess, showError } = usePageAlert()
 const {
   faqs,
@@ -202,11 +221,9 @@ const {
   faqPagination,
   faqLoading,
   filters,
-  services
+  services,
+  clients
 } = storeToRefs(knowledgeStore)
-
-// Inject addFAQTrigger from parent
-const addFAQTrigger = inject('addFAQTrigger', ref(0))
 
 // Local state
 const listCollapsed = ref(false)
@@ -261,12 +278,75 @@ const getFAQAnswer = (faq) => {
   return faq.answer || faq.faq_answer || faq.content || faq.faq_content || ''
 }
 
+// 獲取 FAQ 建立者名稱
+const getFAQCreatedByName = (faq) => {
+  if (!faq) return '未知'
+  return faq.createdByName || faq.created_by_name || faq.creatorName || faq.creator_name || '未知'
+}
+
+// 獲取 FAQ 建立時間並格式化（YYYY-MM-DD HH:mm）
+const getFAQCreatedAtFormatted = (faq) => {
+  if (!faq) return ''
+  const createdAt = faq.createdAt || faq.created_at || faq.createdAtFormatted || faq.created_at_formatted
+  if (!createdAt) return ''
+  try {
+    return formatDateTime(createdAt)
+  } catch (error) {
+    console.warn('格式化建立時間失敗:', error, createdAt)
+    return createdAt
+  }
+}
+
+// 渲染 FAQ 答案（支援富文本）
+const renderFAQAnswer = (faq) => {
+  const answer = getFAQAnswer(faq)
+  if (!answer) return ''
+
+  try {
+    if (isHtmlContent(answer)) {
+      return renderRichText(answer)
+    } else {
+      // 純文本轉換為簡單 HTML（保留換行）
+      return textToHtml(answer)
+    }
+  } catch (error) {
+    console.warn('渲染 FAQ 答案失敗:', error, answer)
+    return textToHtml(answer)
+  }
+}
+
 // 判斷是否為當前選中的 FAQ
 const isCurrentFAQ = (faq) => {
   if (!currentFAQ.value) return false
   const faqId = faq.id || faq.faqId || faq.faq_id
   const currentId = currentFAQ.value.id || currentFAQ.value.faqId || currentFAQ.value.faq_id
   return faqId === currentId
+}
+
+// 獲取 FAQ 建立者 ID（支持多種字段名格式）
+const getFAQCreatedBy = (faq) => {
+  if (!faq) return null
+  return faq.created_by || faq.createdBy || faq.creator_id || faq.creatorId || null
+}
+
+// 判斷當前使用者是否可以編輯/刪除 FAQ
+// 只有建立者或管理員可以編輯/刪除
+const canEditFAQ = (faq) => {
+  if (!faq || !authStore.user) return false
+  
+  const currentUserId = authStore.userId
+  const faqCreatedBy = getFAQCreatedBy(faq)
+  const isAdmin = authStore.isAdmin
+  
+  // 如果是管理員，可以編輯/刪除
+  if (isAdmin) return true
+  
+  // 如果是建立者，可以編輯/刪除
+  if (currentUserId && faqCreatedBy) {
+    return String(currentUserId) === String(faqCreatedBy)
+  }
+  
+  return false
 }
 
 // 查看 FAQ
@@ -296,15 +376,27 @@ const handleEditFAQ = (faq) => {
 // 刪除 FAQ
 const handleDeleteFAQ = async (faq) => {
   const faqId = faq.id || faq.faqId || faq.faq_id
-  try {
-    await knowledgeStore.deleteFAQ(faqId)
-    showSuccess('FAQ 已刪除')
-    // 重新載入列表
-    loadFAQs()
-  } catch (error) {
-    console.error('刪除 FAQ 失敗:', error)
-    showError(error.message || '刪除 FAQ 失敗')
-  }
+  const faqQuestion = getFAQQuestion(faq)
+  
+  // 顯示確認對話框
+  Modal.confirm({
+    title: '確認刪除 FAQ',
+    content: `確定要刪除「${faqQuestion}」嗎？此操作無法復原。`,
+    okText: '確認刪除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await knowledgeStore.deleteFAQ(faqId)
+        showSuccess('FAQ 已刪除')
+        // 重新載入列表
+        loadFAQs()
+      } catch (error) {
+        console.error('刪除 FAQ 失敗:', error)
+        showError(error.message || '刪除 FAQ 失敗')
+      }
+    }
+  })
 }
 
 // 抽屜關閉
@@ -358,15 +450,7 @@ watch(
   { deep: true }
 )
 
-// 監聽 addFAQTrigger 變化，打開新增抽屜
-watch(
-  () => addFAQTrigger.value,
-  () => {
-    if (addFAQTrigger.value > 0) {
-      handleAddFAQ()
-    }
-  }
-)
+// FAQ 頁面不需要處理新增觸發器，這由 KnowledgeLayout 處理
 
 // 新增 FAQ
 const handleAddFAQ = () => {

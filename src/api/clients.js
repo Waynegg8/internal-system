@@ -1,10 +1,35 @@
 import request from './request'
 
 /**
- * 客戶相關 API
+ * 客戶相關 API - BR1.1 客戶列表管理
  */
 
-// 直接導出的函數（用於組件中直接導入）
+// BR1.1 任務所需的 API 函數
+
+/**
+ * 獲取客戶列表 - BR1.1.1, BR1.1.2, BR1.1.3
+ */
+export const getClients = async (params = {}) => {
+  const response = await request.get('/clients', { params })
+  return response
+}
+
+/**
+ * 批量移轉客戶負責人 - BR1.1.5
+ */
+export const batchTransferAssignee = async (payload) => {
+  const response = await request.post('/clients/batch-assign', payload)
+  return response
+}
+
+/**
+ * 刪除客戶 - BR1.1.6
+ */
+export const deleteClient = async (clientId) => {
+  const response = await request.delete(`/clients/${clientId}`)
+  return response
+}
+
 export const fetchAllClients = async (params = {}) => {
   const response = await request.get('/clients', { params: { ...params, perPage: params.perPage || 1000 } })
   return response

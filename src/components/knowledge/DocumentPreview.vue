@@ -1,6 +1,6 @@
 <template>
   <div class="document-preview">
-    <a-spin :spinning="loading" tip="載入中...">
+    <a-spin :spinning="loading || loadingPreviewUrl" tip="載入中...">
       <!-- PDF 預覽 -->
       <div v-if="fileType === 'pdf' && pdfData" class="preview-container">
         <PdfViewer :data="pdfData" :file-name="getFileName(document)" />
@@ -13,6 +13,28 @@
           alt="文檔預覽"
           class="preview-image"
         />
+      </div>
+
+      <!-- Office 文件預覽 -->
+      <div v-else-if="fileType === 'office' && previewUrl" class="preview-container">
+        <iframe
+          :src="googleDocsViewerUrl"
+          class="preview-iframe"
+          frameborder="0"
+          allowfullscreen
+        />
+      </div>
+
+      <!-- Office 文件預覽失敗或載入中 -->
+      <div v-else-if="fileType === 'office' && !previewUrl && !error" class="preview-other">
+        <div class="file-icon">
+          <FileOutlined style="font-size: 64px; color: #999" />
+        </div>
+        <div class="file-name">{{ getFileName(document) }}</div>
+        <div class="file-size">{{ formatFileSize(document) }}</div>
+        <a-button type="primary" @click="handleDownload" :loading="downloading">
+          下載文件
+        </a-button>
       </div>
 
       <!-- 不支持預覽的文件類型 -->
@@ -30,9 +52,14 @@
       <!-- 錯誤狀態 -->
       <div v-else-if="error" class="preview-error">
         <a-alert type="error" :message="error" show-icon />
-        <a-button type="primary" style="margin-top: 16px" @click="handleRetry">
-          重試
-        </a-button>
+        <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: center;">
+          <a-button type="primary" @click="handleRetry">
+            重試
+          </a-button>
+          <a-button v-if="document" @click="handleDownload" :loading="downloading">
+            下載文件
+          </a-button>
+        </div>
       </div>
 
       <!-- 空狀態 -->
@@ -46,7 +73,7 @@
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { FileOutlined } from '@ant-design/icons-vue'
-import { downloadDocument } from '@/api/knowledge'
+import { downloadDocument, getPreviewUrl } from '@/api/knowledge'
 import PdfViewer from '@/components/shared/PdfViewer.vue'
 
 const props = defineProps({
@@ -61,6 +88,8 @@ const error = ref(null)
 const blobUrl = ref(null)
 const downloading = ref(false)
 const pdfData = ref(null)
+const previewUrl = ref(null)
+const loadingPreviewUrl = ref(false)
 
 const fileType = computed(() => {
   if (!props.document) return null
@@ -76,6 +105,20 @@ const fileType = computed(() => {
   const imageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp']
   if (imageExtensions.some(ext => fileName.endsWith(ext)) || imageTypes.some(t => type.includes(t))) {
     return 'image'
+  }
+
+  // Office 文件類型判斷
+  const officeExtensions = ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx']
+  const officeTypes = [
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  ]
+  if (officeExtensions.some(ext => fileName.endsWith(ext)) || officeTypes.some(t => type.includes(t))) {
+    return 'office'
   }
 
   return 'other'
@@ -103,12 +146,65 @@ const releaseBlob = () => {
 const resetData = () => {
   releaseBlob()
   pdfData.value = null
+  previewUrl.value = null
+}
+
+// Google Docs Viewer URL
+const googleDocsViewerUrl = computed(() => {
+  if (!previewUrl.value) return ''
+  // 編碼預覽 URL 並傳遞給 Google Docs Viewer
+  const encodedUrl = encodeURIComponent(previewUrl.value)
+  return `https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`
+})
+
+const loadPreviewUrl = async () => {
+  if (!props.document) {
+    previewUrl.value = null
+    return
+  }
+
+  const docId = props.document.id || props.document.documentId || props.document.document_id
+  if (!docId) {
+    previewUrl.value = null
+    return
+  }
+
+  loadingPreviewUrl.value = true
+  error.value = null
+
+  try {
+    const response = await getPreviewUrl(docId)
+    // 響應格式: { ok: true, data: { previewUrl, expiresAt, expiresIn }, message, code, meta }
+    // axios interceptor 返回 response.data，所以這裡 response 已經是 { ok, data, message, code, meta }
+    if (response?.data?.previewUrl) {
+      previewUrl.value = response.data.previewUrl
+    } else if (response?.previewUrl) {
+      // 兼容不同的響應格式
+      previewUrl.value = response.previewUrl
+    } else {
+      throw new Error('無法獲取預覽 URL')
+    }
+  } catch (err) {
+    error.value = err.message || '獲取預覽 URL 失敗'
+    console.error('獲取預覽 URL 失敗:', err)
+    previewUrl.value = null
+  } finally {
+    loadingPreviewUrl.value = false
+  }
 }
 
 const loadDocument = async () => {
   if (!props.document) {
     resetData()
     error.value = null
+    return
+  }
+
+  // Office 文件需要獲取預覽 URL
+  if (fileType.value === 'office') {
+    resetData()
+    error.value = null
+    await loadPreviewUrl()
     return
   }
 
@@ -183,7 +279,11 @@ const handleDownload = async () => {
 }
 
 const handleRetry = () => {
-  loadDocument()
+  if (fileType.value === 'office') {
+    loadPreviewUrl()
+  } else {
+    loadDocument()
+  }
 }
 
 watch(
@@ -201,36 +301,40 @@ onUnmounted(() => {
 
 <style scoped>
 .document-preview {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  padding: 12px;
-  min-height: 0;
+  width: 100% !important;
+  min-height: 1000px !important; /* 直接設置最小高度，不依賴父容器 */
+  height: 100% !important; /* 如果有空間則填充父容器 */
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important; /* 移除 padding，讓預覽內容完全填充空間 */
+  flex: 1 !important; /* 確保填充父容器 */
 }
 
 .document-preview :deep(.ant-spin-container) {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 1000px !important; /* 確保 spin 容器也有最小高度 */
+  height: 100% !important;
 }
 
 .document-preview :deep(.ant-spin-nested-loading) {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 1000px !important; /* 確保 spin 容器也有最小高度 */
+  height: 100% !important;
 }
 
 .preview-container {
-  width: 100%;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  min-height: 0;
-  overflow: hidden;
+  width: 100% !important;
+  min-height: 1000px !important; /* 確保預覽容器至少有 1000px 高度 */
+  height: 100% !important; /* 確保填充父容器 */
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  overflow: hidden !important;
 }
 
 .preview-image {
@@ -241,6 +345,14 @@ onUnmounted(() => {
   object-fit: contain;
   display: block;
   margin: 0 auto;
+  border-radius: 4px;
+}
+
+.preview-iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 1000px !important; /* 確保 iframe 至少有 1000px 高度 */
+  border: none;
   border-radius: 4px;
 }
 

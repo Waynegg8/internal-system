@@ -47,15 +47,23 @@ export function useReportsApi() {
    * 載入月度薪資報表
    * @param {number} year - 年份
    * @param {number} month - 月份 (1-12)
+   * @param {Object} options - 選項參數
+   * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
    * @returns {Promise} API 響應
    */
-  const fetchMonthlyPayroll = async (year, month) => {
+  const fetchMonthlyPayroll = async (year, month, options = {}) => {
     try {
+      const params = {
+        year,
+        month
+      }
+
+      if (options.refresh) {
+        params.refresh = 1
+      }
+
       const response = await request.get('/reports/monthly/payroll', {
-        params: {
-          year,
-          month
-        }
+        params
       })
       
       // 處理多種 API 響應格式
@@ -76,15 +84,23 @@ export function useReportsApi() {
    * 載入月度員工產值報表
    * @param {number} year - 年份
    * @param {number} month - 月份 (1-12)
+   * @param {Object} options - 選項參數
+   * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
    * @returns {Promise} API 響應
    */
-  const fetchMonthlyEmployeePerformance = async (year, month) => {
+  const fetchMonthlyEmployeePerformance = async (year, month, options = {}) => {
     try {
+      const params = {
+        year,
+        month
+      }
+
+      if (options.refresh) {
+        params.refresh = 1
+      }
+
       const response = await request.get('/reports/monthly/employee-performance', {
-        params: {
-          year,
-          month
-        }
+        params
       })
       
       // 處理多種 API 響應格式
@@ -105,15 +121,23 @@ export function useReportsApi() {
    * 載入月度客戶毛利報表
    * @param {number} year - 年份
    * @param {number} month - 月份 (1-12)
+   * @param {Object} options - 選項參數
+   * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
    * @returns {Promise} API 響應
    */
-  const fetchMonthlyClientProfitability = async (year, month) => {
+  const fetchMonthlyClientProfitability = async (year, month, options = {}) => {
     try {
+      const params = {
+        year,
+        month
+      }
+
+      if (options.refresh) {
+        params.refresh = 1
+      }
+
       const response = await request.get('/reports/monthly/client-profitability', {
-        params: {
-          year,
-          month
-        }
+        params
       })
       
       // 處理多種 API 響應格式
@@ -133,12 +157,20 @@ export function useReportsApi() {
   /**
    * 載入年度收款報表
    * @param {number} year - 年份
+   * @param {Object} options - 選項參數
+   * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
    * @returns {Promise} API 響應
    */
-  const fetchAnnualRevenue = async (year) => {
+  const fetchAnnualRevenue = async (year, options = {}) => {
     try {
+      const params = { year }
+
+      if (options.refresh) {
+        params.refresh = 1
+      }
+
       const response = await request.get('/reports/annual/revenue', {
-        params: { year }
+        params
       })
       
       if (response && response.ok !== undefined) {
@@ -157,12 +189,20 @@ export function useReportsApi() {
   /**
    * 載入年度薪資報表
    * @param {number} year - 年份
+   * @param {Object} options - 選項參數
+   * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
    * @returns {Promise} API 響應
    */
-  const fetchAnnualPayroll = async (year) => {
+  const fetchAnnualPayroll = async (year, options = {}) => {
     try {
+      const params = { year }
+
+      if (options.refresh) {
+        params.refresh = 1
+      }
+
       const response = await request.get('/reports/annual/payroll', {
-        params: { year }
+        params
       })
       
       if (response && response.ok !== undefined) {
@@ -181,12 +221,20 @@ export function useReportsApi() {
   /**
    * 載入年度員工產值報表
    * @param {number} year - 年份
+   * @param {Object} options - 選項參數
+   * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
    * @returns {Promise} API 響應
    */
-  const fetchAnnualEmployeePerformance = async (year) => {
+  const fetchAnnualEmployeePerformance = async (year, options = {}) => {
     try {
+      const params = { year }
+
+      if (options.refresh) {
+        params.refresh = 1
+      }
+
       const response = await request.get('/reports/annual/employee-performance', {
-        params: { year }
+        params
       })
       
       if (response && response.ok !== undefined) {
@@ -205,12 +253,20 @@ export function useReportsApi() {
   /**
    * 載入年度客戶毛利報表
    * @param {number} year - 年份
+   * @param {Object} options - 選項參數
+   * @param {boolean} options.refresh - 是否強制刷新（忽略快取）
    * @returns {Promise} API 響應
    */
-  const fetchAnnualClientProfitability = async (year) => {
+  const fetchAnnualClientProfitability = async (year, options = {}) => {
     try {
+      const params = { year }
+
+      if (options.refresh) {
+        params.refresh = 1
+      }
+
       const response = await request.get('/reports/annual/client-profitability', {
-        params: { year }
+        params
       })
       
       if (response && response.ok !== undefined) {

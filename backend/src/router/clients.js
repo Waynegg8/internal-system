@@ -32,6 +32,21 @@ export const clientsRoutes = [
     handler: withAuth(handleClients),
   },
   {
+    pattern: /^\/api\/v2\/clients\/([^\/]+)\/billing\/revenue$/,
+    methods: ["GET"],
+    handler: withAuth(handleClients),
+  },
+  {
+    pattern: /^\/api\/v2\/clients\/([^\/]+)\/billing\/plans\/(.+)$/,
+    methods: ["PUT", "DELETE"],
+    handler: withAuth(handleClients),
+  },
+  {
+    pattern: /^\/api\/v2\/clients\/([^\/]+)\/billing\/plans$/,
+    methods: ["GET", "POST"],
+    handler: withAuth(handleClients),
+  },
+  {
     pattern: /^\/api\/v2\/clients\/([^\/]+)\/services\/(\d+)\/items$/,
     methods: ["GET"],
     handler: withAuth(handleClients),

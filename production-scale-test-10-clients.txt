@@ -1,0 +1,37 @@
+
+Running 1 test using 1 worker
+
+
+
+[1A[2K(node:32300) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K(node:32300) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[1/1] [chromium] › tests\e2e\tasks\task-auto-generation-br2-5-production-scale.spec.ts:87:3 › BR2.5: 任務自動生成 - 生產規模測試 › 生產規模：管理員應該能夠手動觸發任務生成
+[1A[2K[chromium] › tests\e2e\tasks\task-auto-generation-br2-5-production-scale.spec.ts:87:3 › BR2.5: 任務自動生成 - 生產規模測試 › 生產規模：管理員應該能夠手動觸發任務生成
+[BR2.5 Production Scale] 開始設置測試數據：10個客戶，每個7個服務，每個6個任務配置
+
+[1A[2K[BR2.5 Production Scale] 開始創建 10 個客戶...
+
+[1A[2K[BR2.5 Production Scale] 已創建 10/10 個客戶
+
+[1A[2K[BR2.5 Production Scale] 測試數據設置完成：10個客戶，70個服務，420個任務配置
+
+[1A[2KBR2.5 生產規模測試數據設置完成: { clients: [33m10[39m, services: [33m70[39m, taskConfigs: [33m420[39m }
+
+[1A[2K[生產規模測試] 任務生成耗時: 8.35秒
+
+[1A[2K[生產規模測試] 生成結果: {
+  generated: [33m14[39m,
+  skipped: [33m15[39m,
+  processedServices: [33m0[39m,
+  totalServices: [33m156[39m,
+  queryCount: [33m37[39m
+}
+
+[1A[2K[生產規模測試] 預期任務數: 420, 實際生成: 14
+
+[1A[2K[BR2.5 Production Scale] 開始清理測試數據：10個客戶
+

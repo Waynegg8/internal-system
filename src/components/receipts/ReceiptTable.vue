@@ -37,7 +37,7 @@
         
         <!-- 到期日期 -->
         <template v-else-if="column.key === 'dueDate'">
-          <span :style="isOverdue(record) ? { color: '#ef4444' } : {}">
+          <span :style="record.is_overdue ? { color: '#ef4444' } : {}">
             {{ formatDate(record.dueDate || record.due_date) }}
           </span>
         </template>
@@ -202,28 +202,18 @@ const columns = [
   }
 ]
 
-// 判斷是否已逾期
-const isOverdue = (record) => {
-  const dueDate = record.dueDate || record.due_date
-  if (!dueDate) return false
-  
-  const status = record.status
-  const today = dayjs().startOf('day')
-  const due = dayjs(dueDate).startOf('day')
-  
-  // 如果到期日期小於今天且狀態為未付款或部分付款，則為已逾期
-  return due.isBefore(today) && (status === 'unpaid' || status === 'partial')
-}
+// 逾期判斷現在由後端處理，直接使用 record.is_overdue
 
 // 獲取狀態顏色
 const getStatusColor = (record) => {
   const status = record.status
-  
+  const isOverdue = record.is_overdue
+
   // 如果已逾期，返回紅色
-  if (isOverdue(record)) {
+  if (isOverdue) {
     return 'error'
   }
-  
+
   // 根據狀態返回顏色
   switch (status) {
     case 'unpaid':
@@ -244,12 +234,19 @@ const getStatusColor = (record) => {
 // 獲取狀態文字
 const getStatusText = (record) => {
   const status = record.status
-  
-  // 如果已逾期，顯示「已逾期」
-  if (isOverdue(record)) {
+  const isOverdue = record.is_overdue
+  const overdueDays = record.overdue_days
+
+  // 如果已逾期，顯示逾期天數
+  if (isOverdue && overdueDays) {
+    return `逾期 ${overdueDays} 天`
+  }
+
+  // 如果已逾期（但沒有天數），顯示「已逾期」
+  if (isOverdue) {
     return '已逾期'
   }
-  
+
   // 根據狀態返回文字
   switch (status) {
     case 'unpaid':

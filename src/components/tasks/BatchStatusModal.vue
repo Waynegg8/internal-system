@@ -6,14 +6,16 @@
     @ok="handleSubmit"
     @cancel="handleCancel"
   >
-    <div style="margin-bottom: 16px">
-      <a-typography-text type="secondary">
-        已選擇 {{ selectedCount }} 個任務
-      </a-typography-text>
-    </div>
-
-    <a-form :model="form" layout="vertical">
-      <a-form-item label="選擇新狀態" required>
+    <a-form :model="form" layout="vertical" ref="formRef">
+      <a-form-item label="操作確認">
+        <a-alert
+          type="info"
+          :message="`將為 ${selectedCount} 個任務更新狀態`"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+      </a-form-item>
+      <a-form-item label="選擇新狀態" name="status" :rules="[{ required: true, message: '請選擇狀態' }]">
         <a-select
           v-model:value="form.status"
           placeholder="請選擇狀態"
@@ -45,6 +47,7 @@ const props = defineProps({
 
 const emit = defineEmits(['submit', 'cancel', 'update:visible'])
 
+const formRef = ref(null)
 const loading = ref(false)
 const form = ref({
   status: null
@@ -58,18 +61,25 @@ const visible = computed({
 watch(() => props.visible, (newVal) => {
   if (newVal) {
     form.value.status = null
+    formRef.value?.resetFields()
   }
 })
 
-const handleSubmit = () => {
-  if (!form.value.status) {
-    return
+const handleSubmit = async () => {
+  try {
+    await formRef.value.validate()
+    
+    if (!form.value.status) {
+      return
+    }
+    
+    loading.value = true
+    emit('submit', form.value.status)
+  } catch (error) {
+    console.error('表單驗證失敗:', error)
+  } finally {
+    // 注意：loading 狀態由父組件控制，這裡不重置
   }
-  loading.value = true
-  emit('submit', form.value.status)
-  setTimeout(() => {
-    loading.value = false
-  }, 500)
 }
 
 const handleCancel = () => {

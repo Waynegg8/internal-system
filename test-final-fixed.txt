@@ -1,0 +1,163 @@
+
+Running 21 tests using 1 worker
+
+
+
+[1A[2K(node:26292) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K(node:26292) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[1/21] [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:84:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.1: 任務自動生成邏輯 › 管理員應該能夠手動觸發任務生成
+[1A[2K[chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:84:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.1: 任務自動生成邏輯 › 管理員應該能夠手動觸發任務生成
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0074412808'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763674412808'[39m,
+      taxId: [32m'74412808'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m568[39m,
+      clientId: [32m'0074412808'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m680[39m,
+      clientServiceId: [33m568[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m681[39m,
+      clientServiceId: [33m568[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m682[39m,
+      clientServiceId: [33m568[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+
+[1A[2K[2/21] [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:102:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.1: 任務自動生成邏輯 › 系統應該檢查任務是否已存在（避免重複生成）
+[1A[2K[3/21] [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:131:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.1: 任務自動生成邏輯 › 系統應該記錄任務生成歷史
+[1A[2K[4/21] [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:163:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.2: 任務生成時間計算 › 應該正確計算「服務月份開始時」生成時間
+[1A[2K[5/21] [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:196:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.2: 任務生成時間計算 › 應該正確計算「前一個月最後X天」生成時間
+
+
+[1A[2K  1) [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:196:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.2: 任務生成時間計算 › 應該正確計算「前一個月最後X天」生成時間 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m2[39m
+    Received: [31m3[39m
+
+      245 |         
+      246 |         // 驗證月份：前一個月應該是2月（serviceMonth=3，前一個月是2月）
+    > 247 |         expect(genMonth).toBe(2) // 2月
+          |                          ^
+      248 |         
+      249 |         // 驗證日期在最後3天範圍內（2月有29天，最後3天是27, 28, 29）
+      250 |         expect(genDay).toBeGreaterThanOrEqual(27)
+        at C:\Users\miama\Desktop\system-new\tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:247:26
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+
+[1A[2KInternal error: step id not found: fixture@121[1A[2K(node:35796) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K(node:35796) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[6/21] [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:255:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.2: 任務生成時間計算 › 應該處理月份天數不足的情況
+[1A[2K[chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:255:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.2: 任務生成時間計算 › 應該處理月份天數不足的情況
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0074490988'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763674490988'[39m,
+      taxId: [32m'74490988'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m569[39m,
+      clientId: [32m'0074490988'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m683[39m,
+      clientServiceId: [33m569[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m684[39m,
+      clientServiceId: [33m569[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m685[39m,
+      clientServiceId: [33m569[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+
+[1A[2K[7/21] [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:273:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.3: 任務到期日計算 › 應該正確計算到期日

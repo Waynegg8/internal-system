@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import { fetchServices, fetchClients, fetchSOPs, fetchSOP, createSOP, updateSOP, deleteSOP, fetchFAQs, fetchFAQ, createFAQ, updateFAQ, deleteFAQ, fetchDocuments, fetchDocument, uploadDocument as uploadDocumentApi, downloadDocument, deleteDocument } from '@/api/knowledge'
+import { fetchServices, fetchClients, fetchSOPs, fetchSOP, createSOP, updateSOP, deleteSOP, fetchFAQs, fetchFAQ, createFAQ, updateFAQ, deleteFAQ, fetchDocuments, fetchDocument, uploadDocument as uploadDocumentApi, updateDocument as updateDocumentApi, downloadDocument, getPreviewUrl, deleteDocument, batchDeleteDocuments as batchDeleteDocumentsApi } from '@/api/knowledge'
+import { fetchAttachments as fetchAttachmentsApi, downloadAttachment as downloadAttachmentApi, deleteAttachment as deleteAttachmentApi } from '@/api/attachments'
 import { extractApiArray, extractApiData } from '@/utils/apiHelpers'
 
 export const useKnowledgeStore = defineStore('knowledge', {
@@ -219,19 +220,103 @@ export const useKnowledgeStore = defineStore('knowledge', {
     },
 
     /**
-     * 載入標籤列表（從 localStorage）
+     * 載入標籤列表（從 FAQ 記錄自動提取 + localStorage 備份）
      */
-    fetchTags() {
+    async fetchTags() {
       try {
-        const storedTags = localStorage.getItem('knowledge_tags')
-        if (storedTags) {
-          this.tags = JSON.parse(storedTags)
-        } else {
-          this.tags = []
+        // 1. 先從 localStorage 載入備份標籤
+        let storedTags = []
+        try {
+          const storedTagsStr = localStorage.getItem('knowledge_tags')
+          if (storedTagsStr) {
+            storedTags = JSON.parse(storedTagsStr)
+          }
+        } catch (e) {
+          console.warn('從 localStorage 載入標籤失敗:', e)
         }
+
+        // 2. 從 FAQ 記錄中提取標籤
+        let faqTags = []
+        try {
+          // 獲取 FAQ 記錄來提取標籤（使用默認分頁，避免過大請求）
+          // 嘗試獲取多頁以獲取更多標籤，但限制總數
+          const maxPages = 5 // 最多獲取 5 頁，即最多 100 個 FAQ
+          const allTags = new Set()
+          
+          for (let page = 1; page <= maxPages; page++) {
+            try {
+              const response = await fetchFAQs({ per_page: 20, page })
+              const data = extractApiData(response, {})
+              const faqs = Array.isArray(data) ? data : (data.faqs || extractApiArray(response, []))
+              
+              if (!faqs || faqs.length === 0) {
+                break // 沒有更多數據了
+              }
+              
+              // 從每個 FAQ 中提取標籤
+              faqs.forEach(faq => {
+                if (faq.tags) {
+                  let tags = []
+                  if (Array.isArray(faq.tags)) {
+                    tags = faq.tags
+                  } else if (typeof faq.tags === 'string') {
+                    // 處理逗號分隔的字串
+                    tags = faq.tags.split(',').map(t => t.trim()).filter(Boolean)
+                  }
+                  tags.forEach(tag => {
+                    if (tag) {
+                      allTags.add(tag)
+                    }
+                  })
+                }
+              })
+              
+              // 檢查是否還有更多頁
+              const hasNext = response.meta?.hasNext || (faqs.length < 20)
+              if (!hasNext) {
+                break
+              }
+            } catch (pageError) {
+              console.warn(`獲取第 ${page} 頁 FAQ 失敗:`, pageError)
+              break // 如果某一頁失敗，停止獲取
+            }
+          }
+          
+          faqTags = Array.from(allTags).sort()
+          console.log('從 FAQ 提取的標籤:', faqTags.length, faqTags)
+        } catch (error) {
+          console.warn('從 FAQ 提取標籤失敗:', error)
+        }
+
+        // 3. 合併兩個來源的標籤並去重
+        const mergedTags = new Set([...faqTags, ...storedTags])
+        this.tags = Array.from(mergedTags).sort()
+        
+        // 4. 更新 localStorage 作為備份
+        if (this.tags.length > 0) {
+          try {
+            localStorage.setItem('knowledge_tags', JSON.stringify(this.tags))
+          } catch (e) {
+            console.warn('保存標籤到 localStorage 失敗:', e)
+          }
+        }
+        
+        console.log('載入的標籤列表:', this.tags.length, this.tags)
+        return this.tags
       } catch (error) {
         console.error('載入標籤失敗:', error)
-        this.tags = []
+        // 失敗時嘗試從 localStorage 載入
+        try {
+          const storedTags = localStorage.getItem('knowledge_tags')
+          if (storedTags) {
+            this.tags = JSON.parse(storedTags)
+          } else {
+            this.tags = []
+          }
+        } catch (e) {
+          this.tags = []
+        }
+        return this.tags
       }
     },
 
@@ -937,6 +1022,82 @@ export const useKnowledgeStore = defineStore('knowledge', {
     },
 
     /**
+     * 更新文檔
+     * @param {string|number} id - 文檔 ID
+     * @param {Object|FormData} data - 文檔數據
+     * @param {Function} [onProgress] - 進度回調（用於文件上傳）
+     */
+    async updateDocument(id, data, onProgress) {
+      this.documentLoading = true
+      this.error = null
+      try {
+        console.log('Store: 開始更新文檔:', id)
+        const response = await updateDocumentApi(id, data, onProgress)
+        console.log('Store: 更新文檔響應:', response)
+        
+        // 處理 API 響應格式
+        let document = null
+        if (response && typeof response === 'object') {
+          if (response.ok && response.data) {
+            // 標準響應格式
+            document = response.data
+          } else if (response.data && !response.ok) {
+            // 有 data 但 ok 為 false（錯誤響應）
+            throw new Error(response.message || '更新失敗')
+          } else if (response.document_id || response.id) {
+            // 響應本身就是文檔對象
+            document = response
+          } else if (response.document) {
+            document = response.document
+          } else {
+            document = response
+          }
+        } else {
+          document = response
+        }
+
+        console.log('Store: 處理後的文檔對象:', document)
+
+        const normalizedDocument = this.normalizeDocument(document)
+
+        if (normalizedDocument) {
+          // 更新列表中的文檔
+          const existingIndex = this.documents.findIndex(doc => {
+            const docId = doc.document_id || doc.id || doc.documentId
+            const updateId = normalizedDocument.document_id || normalizedDocument.id || normalizedDocument.documentId
+            return docId === updateId
+          })
+
+          if (existingIndex !== -1) {
+            this.documents.splice(existingIndex, 1, normalizedDocument)
+          }
+
+          // 如果更新的是當前選中的文檔，更新當前選中
+          if (this.currentDocument) {
+            const currentId = this.currentDocument.id || this.currentDocument.documentId || this.currentDocument.document_id
+            const updateId = normalizedDocument.document_id || normalizedDocument.id || normalizedDocument.documentId
+            if (String(currentId) === String(updateId)) {
+              this.currentDocument = normalizedDocument
+            }
+          }
+        }
+
+        return normalizedDocument
+      } catch (error) {
+        console.error('Store: 更新文檔錯誤:', error)
+        console.error('Store: 錯誤詳情:', {
+          message: error.message,
+          response: error.response,
+          request: error.request
+        })
+        this.error = error.message || '更新文檔失敗'
+        throw error
+      } finally {
+        this.documentLoading = false
+      }
+    },
+
+    /**
      * 下載文檔
      * @param {string|number} id - 文檔 ID
      * @returns {Promise<Blob>} Blob 數據
@@ -949,6 +1110,85 @@ export const useKnowledgeStore = defineStore('knowledge', {
         return blob
       } catch (error) {
         this.error = error.message || '下載文檔失敗'
+        throw error
+      } finally {
+        this.documentLoading = false
+      }
+    },
+
+    /**
+     * 批量刪除文檔
+     * @param {Array<string|number>} ids - 文檔 ID 數組
+     * @returns {Promise<Object>} 響應數據，包含 success_count, failed_count, success_ids, failed_ids 等
+     */
+    async batchDeleteDocuments(ids) {
+      this.documentLoading = true
+      this.error = null
+      try {
+        console.log('Store: 開始批量刪除文檔:', ids)
+        const response = await batchDeleteDocumentsApi(ids)
+        console.log('Store: 批量刪除文檔響應:', response)
+        
+        // 處理 API 響應格式
+        let result = null
+        if (response && typeof response === 'object') {
+          if (response.ok && response.data) {
+            // 標準響應格式
+            result = response.data
+          } else if (response.data && !response.ok) {
+            // 有 data 但 ok 為 false（錯誤響應）
+            throw new Error(response.message || '批量刪除失敗')
+          } else {
+            // 響應本身就是結果對象
+            result = response
+          }
+        } else {
+          result = response
+        }
+
+        console.log('Store: 處理後的批量刪除結果:', result)
+
+        // 從響應中獲取成功和失敗的 ID
+        const successIds = result?.success_ids || []
+        const failedIds = result?.failed_ids || []
+        const successCount = result?.success_count || successIds.length
+        const failedCount = result?.failed_count || failedIds.length
+
+        // 從列表中移除成功刪除的文檔
+        if (successIds.length > 0) {
+          this.documents = this.documents.filter(d => {
+            const docId = d.id || d.documentId || d.document_id
+            return !successIds.includes(Number(docId))
+          })
+          this.documentPagination.total -= successCount
+        }
+
+        // 如果當前選中的文檔被刪除，清除當前選中
+        if (this.currentDocument && successIds.length > 0) {
+          const currentId = this.currentDocument.id || this.currentDocument.documentId || this.currentDocument.document_id
+          if (successIds.includes(Number(currentId))) {
+            this.currentDocument = null
+          }
+        }
+
+        // 返回結果，包含成功和失敗的統計信息
+        return {
+          success_count: successCount,
+          failed_count: failedCount,
+          success_ids: successIds,
+          failed_ids: failedIds,
+          unauthorized_ids: result?.unauthorized_ids || [],
+          not_found_ids: result?.not_found_ids || [],
+          message: result?.message || response?.message || `已成功刪除 ${successCount} 筆文檔${failedCount > 0 ? `，${failedCount} 筆失敗` : ''}`
+        }
+      } catch (error) {
+        console.error('Store: 批量刪除文檔錯誤:', error)
+        console.error('Store: 錯誤詳情:', {
+          message: error.message,
+          response: error.response,
+          request: error.request
+        })
+        this.error = error.message || '批量刪除文檔失敗'
         throw error
       } finally {
         this.documentLoading = false
@@ -1020,19 +1260,37 @@ export const useKnowledgeStore = defineStore('knowledge', {
       this.attachmentLoading = true
       this.error = null
       try {
-        // 構建查詢參數
+        // 構建查詢參數，使用新的 /api/v2/attachments API 參數格式
         const queryParams = {
           page: this.attachmentPagination.page,
-          per_page: this.attachmentPagination.perPage,
+          perPage: this.attachmentPagination.perPage,
           ...this.attachmentFilters,
           ...params
         }
 
-        // 處理標籤參數（如果是數組，轉換為逗號分隔的字符串）
-        if (Array.isArray(queryParams.tags) && queryParams.tags.length > 0) {
-          queryParams.tags = queryParams.tags.join(',')
-        } else if (Array.isArray(queryParams.tags) && queryParams.tags.length === 0) {
-          delete queryParams.tags
+        // 參數轉換：將舊的參數名稱轉換為新的 API 參數
+        // taskId -> entity_id (當 entity_type 為 task 時)
+        if (queryParams.taskId && !queryParams.entity_id) {
+          queryParams.entity_type = 'task'
+          queryParams.entity_id = String(queryParams.taskId)
+          delete queryParams.taskId
+        }
+
+        // type -> entity_type
+        if (queryParams.type && !queryParams.entity_type) {
+          queryParams.entity_type = queryParams.type
+        }
+
+        // client -> entity_id (當 entity_type 為 client 時)
+        if (queryParams.client && !queryParams.entity_id && queryParams.entity_type === 'client') {
+          queryParams.entity_id = queryParams.client
+          delete queryParams.client
+        }
+
+        // per_page -> perPage
+        if (queryParams.per_page !== undefined && queryParams.perPage === undefined) {
+          queryParams.perPage = queryParams.per_page
+          delete queryParams.per_page
         }
 
         // 移除空值
@@ -1042,83 +1300,81 @@ export const useKnowledgeStore = defineStore('knowledge', {
           }
         })
 
-        if (queryParams.taskId) {
-          queryParams.task_id = queryParams.taskId
-          delete queryParams.taskId
-        }
+        // 調用新的附件 API
+        const response = await fetchAttachmentsApi(queryParams)
+        
+        // 處理 API 響應格式：{ ok: true, data: { attachments: [...], total, page, perPage }, message: "..." }
+        const responseData = response?.data || response
+        let attachmentsData = []
+        let total = 0
+        let page = 1
+        let perPage = 20
 
-        const response = await fetchDocuments(queryParams)
-        
-        // 保存當前列表中的附件信息（用於合併）
-        const existingAttachmentsMap = new Map()
-        this.attachments.forEach(att => {
-          const id = att.id || att.attachment_id
-          if (id) {
-            existingAttachmentsMap.set(String(id), att)
-          }
-        })
-        
-        // 處理多種 API 響應格式
-        const data = extractApiData(response, [])
-        let newAttachments = []
-        if (Array.isArray(data)) {
-          newAttachments = data
-        } else if (data?.documents && Array.isArray(data.documents)) {
-          newAttachments = data.documents
+        if (responseData?.attachments && Array.isArray(responseData.attachments)) {
+          attachmentsData = responseData.attachments
+          total = responseData.total || 0
+          page = responseData.page || this.attachmentPagination.page
+          perPage = responseData.perPage || responseData.per_page || this.attachmentPagination.perPage
+        } else if (Array.isArray(responseData)) {
+          attachmentsData = responseData
+          total = responseData.length
         } else {
-          newAttachments = extractApiArray(response, [])
+          attachmentsData = extractApiArray(response, [])
+          total = response?.meta?.total || response?.total || attachmentsData.length
         }
         
-        // 合併已存在的附件信息（保留 size、name 等完整信息）
-        this.attachments = newAttachments.map(att => {
-          const id = att.id || att.attachment_id
-          
-          // 標準化 API 返回的字段名稱
-          const normalizedAtt = {
+        // 標準化附件數據，確保字段名稱一致
+        this.attachments = attachmentsData.map(att => {
+          // 後端返回的字段：attachment_id, entity_type, entity_id, entity_name, object_key, filename, content_type, size_bytes, uploader_user_id, uploader_name, uploaded_at
+          // 同時支持 snake_case 和 camelCase
+          return {
+            // 原始數據
             ...att,
-            // 處理 size 字段（API 可能返回 sizeBytes）
-            size: att.size || att.file_size || att.sizeBytes || att.size_bytes || 0,
-            file_size: att.file_size || att.size || att.sizeBytes || att.size_bytes || 0,
-            // 處理 name 字段
-            name: att.name || att.filename || att.original_name || '',
-            filename: att.filename || att.name || att.original_name || '',
-            original_name: att.original_name || att.name || att.filename || '',
-            // 處理 type 字段
-            mime_type: att.mime_type || att.type || att.contentType || att.content_type || '',
-            type: att.type || att.mime_type || att.contentType || att.content_type || '',
-            // 處理時間字段
-            created_at: att.created_at || att.upload_time || att.uploadedAt || '',
-            upload_time: att.upload_time || att.created_at || att.uploadedAt || ''
+            // ID 字段（支持多種格式）
+            id: att.attachment_id || att.id || att.document_id,
+            attachment_id: att.attachment_id || att.id || att.document_id,
+            document_id: att.attachment_id || att.id || att.document_id,
+            // 實體相關字段
+            entity_type: att.entity_type || att.entityType,
+            entityType: att.entity_type || att.entityType,
+            entity_id: att.entity_id || att.entityId,
+            entityId: att.entity_id || att.entityId,
+            entity_name: att.entity_name || att.entityName,
+            entityName: att.entity_name || att.entityName,
+            // 文件相關字段
+            filename: att.filename || att.name || att.file_name || att.original_name,
+            name: att.filename || att.name || att.file_name || att.original_name,
+            file_name: att.filename || att.name || att.file_name || att.original_name,
+            original_name: att.original_name || att.filename || att.name || att.file_name,
+            object_key: att.object_key || att.objectKey,
+            objectKey: att.object_key || att.objectKey,
+            content_type: att.content_type || att.contentType || att.mime_type || att.type,
+            contentType: att.content_type || att.contentType || att.mime_type || att.type,
+            mime_type: att.content_type || att.contentType || att.mime_type || att.type,
+            type: att.content_type || att.contentType || att.mime_type || att.type,
+            // 大小字段
+            size_bytes: att.size_bytes || att.sizeBytes || att.size || att.file_size || 0,
+            sizeBytes: att.size_bytes || att.sizeBytes || att.size || att.file_size || 0,
+            size: att.size_bytes || att.sizeBytes || att.size || att.file_size || 0,
+            file_size: att.size_bytes || att.sizeBytes || att.size || att.file_size || 0,
+            // 上傳者字段
+            uploader_user_id: att.uploader_user_id || att.uploaderUserId,
+            uploaderUserId: att.uploader_user_id || att.uploaderUserId,
+            uploader_name: att.uploader_name || att.uploaderName,
+            uploaderName: att.uploader_name || att.uploaderName,
+            // 時間字段
+            uploaded_at: att.uploaded_at || att.uploadedAt || att.created_at || att.createdAt,
+            uploadedAt: att.uploaded_at || att.uploadedAt || att.created_at || att.createdAt,
+            created_at: att.uploaded_at || att.uploadedAt || att.created_at || att.createdAt,
+            createdAt: att.uploaded_at || att.uploadedAt || att.created_at || att.createdAt,
+            upload_time: att.uploaded_at || att.uploadedAt || att.created_at || att.createdAt
           }
-          
-          if (id && existingAttachmentsMap.has(String(id))) {
-            const existing = existingAttachmentsMap.get(String(id))
-            // 合併：優先使用 API 返回的數據，但如果缺少 size 等字段，使用已存在的數據
-            return {
-              ...normalizedAtt,
-              size: normalizedAtt.size || existing.size || existing.file_size || 0,
-              file_size: normalizedAtt.file_size || normalizedAtt.size || existing.file_size || existing.size || 0,
-              name: normalizedAtt.name || existing.name || existing.filename || '',
-              filename: normalizedAtt.filename || normalizedAtt.name || existing.filename || existing.name || '',
-              original_name: normalizedAtt.original_name || normalizedAtt.name || existing.original_name || existing.name || '',
-              mime_type: normalizedAtt.mime_type || normalizedAtt.type || existing.mime_type || existing.type || '',
-              type: normalizedAtt.type || normalizedAtt.mime_type || existing.type || existing.mime_type || '',
-              created_at: normalizedAtt.created_at || normalizedAtt.upload_time || existing.created_at || existing.upload_time || '',
-              upload_time: normalizedAtt.upload_time || normalizedAtt.created_at || existing.upload_time || existing.created_at || ''
-            }
-          }
-          return normalizedAtt
         })
         
         // 更新分頁信息
-        const meta = response.meta || response.metadata || null
-        if (meta) {
-          this.attachmentPagination.page = meta.page || meta.current_page || this.attachmentPagination.page
-          this.attachmentPagination.perPage = meta.per_page || meta.perPage || this.attachmentPagination.perPage
-          this.attachmentPagination.total = meta.total || this.attachments.length
-        } else {
-          this.attachmentPagination.total = this.attachments.length
-        }
+        this.attachmentPagination.page = page
+        this.attachmentPagination.perPage = perPage
+        this.attachmentPagination.total = total
 
         return response
       } catch (error) {
@@ -1223,7 +1479,8 @@ export const useKnowledgeStore = defineStore('knowledge', {
       this.attachmentLoading = true
       this.error = null
       try {
-        const blob = await downloadDocument(id)
+        // 使用新的附件下載 API
+        const blob = await downloadAttachmentApi(id)
         return blob
       } catch (error) {
         this.error = error.message || '下載附件失敗'
@@ -1241,14 +1498,15 @@ export const useKnowledgeStore = defineStore('knowledge', {
       this.attachmentLoading = true
       this.error = null
       try {
-        await deleteDocument(id)
+        // 使用新的附件刪除 API
+        await deleteAttachmentApi(id)
 
         // 從列表中移除
         this.attachments = this.attachments.filter(a => {
-          const attachId = a.document_id || a.id || a.attachmentId || a.attachment_id
-          return attachId !== id
+          const attachId = a.attachment_id || a.id || a.document_id || a.attachmentId
+          return String(attachId) !== String(id)
         })
-        this.attachmentPagination.total -= 1
+        this.attachmentPagination.total = Math.max(0, this.attachmentPagination.total - 1)
 
         return true
       } catch (error) {
@@ -1265,6 +1523,14 @@ export const useKnowledgeStore = defineStore('knowledge', {
      */
     setAttachmentFilters(filters) {
       this.attachmentFilters = { ...this.attachmentFilters, ...filters }
+    },
+
+    /**
+     * 設置當前選中的附件
+     * @param {Object|null} attachment - 附件對象
+     */
+    setCurrentAttachment(attachment) {
+      this.currentAttachment = attachment
     },
 
     /**

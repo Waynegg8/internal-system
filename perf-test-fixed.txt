@@ -1,0 +1,30 @@
+
+Running 1 test using 1 worker
+
+
+
+[1A[2K(node:9956) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:9956) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1A[2K[1/1] [chromium] › tests\e2e\tasks\task-generation-performance-quick.spec.ts:11:3 › 任務生成性能快速測試 › 測試現有數據的任務生成性能
+[1A[2K[chromium] › tests\e2e\tasks\task-generation-performance-quick.spec.ts:11:3 › 任務生成性能快速測試 › 測試現有數據的任務生成性能
+[性能測試] 開始測試 2025-11 的任務生成
+
+[1A[2K[性能測試] 任務生成完成，耗時: 9.65秒
+
+[1A[2K[性能測試] 生成結果: {
+  generated: [33m14[39m,
+  skipped: [33m15[39m,
+  processedServices: [33m0[39m,
+  totalServices: [33m1186[39m,
+  queryCount: [33m37[39m
+}
+
+[1A[2K[性能測試] 實際生成 14 個任務，每個任務平均 0.689 秒
+
+[1A[2K[性能測試] 推斷4,875個任務需要: 56.0 分鐘
+
+[1A[2K  1 passed (29.1s)

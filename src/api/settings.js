@@ -59,8 +59,10 @@ export function useSettingsApi() {
   }
 
   // 任務模板
-  const getTaskTemplates = async () => {
-    const response = await request.get('/settings/task-templates')
+  const getTaskTemplates = async (options = {}) => {
+    // 使用 task-templates.js 中的 fetchTaskTemplates 函數
+    const { fetchTaskTemplates } = await import('./task-templates')
+    const response = await fetchTaskTemplates(options)
     return response
   }
 

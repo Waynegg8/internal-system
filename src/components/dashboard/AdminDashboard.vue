@@ -55,8 +55,38 @@
             class="alerts-card"
             :loading="false"
             title="即時提醒"
-            :extra="alertsExtra"
           >
+            <template #extra>
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                <a-badge
+                  v-if="unreadNotificationCount > 0"
+                  :count="unreadNotificationCount"
+                  :overflow-count="99"
+                  :offset="[-2, 2]"
+                >
+                  <a-button
+                    type="primary"
+                    size="small"
+                    :icon="h(BellOutlined)"
+                    @click="handleViewNotifications"
+                  >
+                    通知
+                  </a-button>
+                </a-badge>
+                <a-button
+                  v-else
+                  type="primary"
+                  size="small"
+                  :icon="h(BellOutlined)"
+                  @click="handleViewNotifications"
+                >
+                  通知
+                </a-button>
+                <span v-if="alerts && alerts.length" class="summary-extra" style="margin-left: 12px">
+                  最近更新 {{ formatDateTime(alerts[0]?.createdAt) }}
+                </span>
+              </div>
+            </template>
             <a-list
               v-if="alerts && alerts.length"
               class="alerts-list"
@@ -123,7 +153,10 @@
 
 <script setup>
 import { computed, h, resolveComponent, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { formatDate, formatDateTime } from '@/utils/formatters'
+import { BellOutlined } from '@ant-design/icons-vue'
+import { useNotificationsApi } from '@/api/notifications'
 import RecentActivities from './RecentActivities.vue'
 import EmployeeTasks from './EmployeeTasks.vue'
 import EmployeeHours from './EmployeeHours.vue'
@@ -186,6 +219,33 @@ const hasSummary = computed(() => {
 })
 
 const AListItem = resolveComponent('a-list-item')
+const router = useRouter()
+const notificationsApi = useNotificationsApi()
+
+// 未讀通知數量
+const unreadNotificationCount = ref(0)
+const loadingNotifications = ref(false)
+
+// 載入未讀通知數量
+const loadUnreadCount = async () => {
+  try {
+    loadingNotifications.value = true
+    const count = await notificationsApi.fetchUnreadCount()
+    unreadNotificationCount.value = count
+  } catch (error) {
+    console.error('[AdminDashboard] 載入未讀通知數量失敗:', error)
+  } finally {
+    loadingNotifications.value = false
+  }
+}
+
+// 跳轉到通知列表
+const handleViewNotifications = () => {
+  router.push('/notifications')
+}
+
+// 定時刷新未讀數量（每30秒）
+let refreshTimer = null
 
 const summaryExtra = computed(() => {
   if (!dailySummary.value?.generatedAt) return null
@@ -200,6 +260,8 @@ const alertsExtra = computed(() => {
   const text = `最近更新 ${formatDateTime(latest)}`
   return h('span', { class: 'summary-extra' }, text)
 })
+
+// alertsExtraWithNotifications 已改為使用模板插槽，不再需要此 computed
 
 const renderAlertItem = (item) => {
   return h(
@@ -307,6 +369,14 @@ watch(() => [financialSection.value, leftColumnWrapper.value], ([financial, left
 }, { immediate: true })
 
 onMounted(() => {
+  // 載入未讀通知數量
+  loadUnreadCount()
+  // 每30秒刷新一次未讀數量
+  refreshTimer = setInterval(() => {
+    loadUnreadCount()
+  }, 30000)
+  
+  // 更新左側列高度
   updateLeftColumnHeight()
   window.addEventListener('resize', updateLeftColumnHeight)
   
@@ -315,6 +385,12 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  // 清理通知刷新定時器
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+  }
+  
+  // 清理高度更新監聽器
   window.removeEventListener('resize', updateLeftColumnHeight)
   if (resizeObserver) {
     resizeObserver.disconnect()

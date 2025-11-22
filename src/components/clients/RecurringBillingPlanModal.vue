@@ -48,19 +48,6 @@
       <a-form-item 
         label="收費月份及金額" 
         name="month_amounts"
-        :rules="[{ 
-          validator: (rule, value) => {
-            if (!value || Object.keys(value).length === 0) {
-              return Promise.reject('請至少勾選一個月份並填寫金額')
-            }
-            for (const [month, amount] of Object.entries(value)) {
-              if (!amount || amount <= 0) {
-                return Promise.reject(`請為 ${month}月 填寫有效的金額`)
-              }
-            }
-            return Promise.resolve()
-          }
-        }]"
       >
         <div style="border: 1px solid #d9d9d9; border-radius: 4px; padding: 16px">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px">
@@ -162,16 +149,18 @@ const formData = reactive({
   notes: ''
 })
 
-// 只顯示已保存的定期服務
+// 只顯示已保存的定期服務（或在新增流程中的臨時定期服務）
 const recurringServiceOptions = computed(() => {
   return store.tempServices
     .filter(service => {
-      // 只顯示已保存的定期服務（有 client_service_id 且 service_type = 'recurring'）
-      return service.client_service_id && 
-             (service.service_type === 'recurring' || !service.service_type) // 兼容舊數據
+      // 顯示定期服務（service_type = 'recurring' 或未設置 service_type）
+      // 支持已保存的服務（有 client_service_id）和臨時服務（有 id）
+      const isRecurring = service.service_type === 'recurring' || !service.service_type
+      const hasId = service.client_service_id || service.id
+      return isRecurring && hasId
     })
     .map(service => ({
-      client_service_id: service.client_service_id,
+      client_service_id: service.client_service_id || service.id, // 使用 client_service_id 或臨時 id
       name: service.name || service.service_name,
       service_id: service.service_id
     }))
@@ -263,38 +252,44 @@ watch(() => props.visible, (newVal) => {
 })
 
 // 處理提交
-const handleSubmit = async () => {
-  try {
-    // 驗證表單
-    await formRef.value?.validate()
-  } catch (error) {
-    if (error.errorFields) {
-      showError('請檢查表單輸入')
-    }
+const handleSubmit = async (e) => {
+  // 阻止默認行為
+  if (e) {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  // 手動驗證：檢查服務是否已選擇
+  if (!formData.service_ids || formData.service_ids.length === 0) {
+    showError('請至少選擇一個定期服務')
     return
+  }
+
+  // 手動驗證：檢查月份和金額
+  const selectedMonths = Object.keys(formData.month_amounts).map(Number)
+  if (selectedMonths.length === 0) {
+    showError('請至少勾選一個月份並填寫金額')
+    return
+  }
+
+  // 驗證每個月份的金額
+  for (const [month, amount] of Object.entries(formData.month_amounts)) {
+    if (!amount || amount <= 0) {
+      showError(`請為 ${month}月 填寫有效的金額`)
+      return
+    }
   }
 
   submitting.value = true
 
   try {
-    // 為每個選中的服務和月份創建收費記錄
-    const selectedMonths = Object.keys(formData.month_amounts).map(Number)
-    
-    if (selectedMonths.length === 0) {
-      showError('請至少勾選一個月份並填寫金額')
-      submitting.value = false
-      return
-    }
-
-    if (formData.service_ids.length === 0) {
-      showError('請至少選擇一個定期服務')
-      submitting.value = false
-      return
-    }
 
     // 為每個服務和月份創建收費記錄
     for (const clientServiceId of formData.service_ids) {
-      const service = store.tempServices.find(s => s.client_service_id === clientServiceId)
+      // 支持臨時服務（使用 id）和已保存的服務（使用 client_service_id）
+      const service = store.tempServices.find(s => 
+        s.client_service_id === clientServiceId || s.id === clientServiceId
+      )
       if (!service) continue
 
       for (const month of selectedMonths) {
@@ -303,7 +298,8 @@ const handleSubmit = async () => {
 
         const billingData = {
           id: `temp_${Date.now()}_${Math.random()}`,
-          client_service_id: clientServiceId,
+          temp_service_id: service.id, // 臨時服務 ID
+          client_service_id: service.client_service_id || service.id, // 已保存的服務 ID 或臨時 ID
           service_id: service.service_id,
           service_name: service.name || service.service_name,
           billing_type: 'recurring',
@@ -316,7 +312,7 @@ const handleSubmit = async () => {
 
         // 檢查是否已存在相同的收費記錄
         const existing = store.tempBillings.find(b => 
-          b.client_service_id === clientServiceId &&
+          (b.client_service_id === clientServiceId || b.temp_service_id === service.id) &&
           b.billing_year === formData.billing_year &&
           b.billing_month === month &&
           b.billing_type === 'recurring'

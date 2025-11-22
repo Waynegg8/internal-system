@@ -33,14 +33,66 @@
       style="margin-bottom: 8px"
     />
     
-    <!-- 操作欄 -->
+    <!-- 操作欄和搜索過濾 -->
     <div class="action-bar" style="margin-bottom: 12px">
-      <a-button type="primary" @click="handleAddTemplate">
-        <template #icon>
-          <plus-outlined />
-        </template>
-        新增模板
-      </a-button>
+      <a-row :gutter="[16, 12]" align="middle">
+        <a-col :xs="24" :sm="12" :md="8" :lg="6">
+          <a-input-search
+            v-model:value="searchKeyword"
+            placeholder="搜尋模板名稱/服務/客戶…"
+            allow-clear
+            @search="handleSearch"
+            @press-enter="handleSearch"
+            @input="handleSearchInput"
+          >
+            <template #prefix>
+              <search-outlined />
+            </template>
+          </a-input-search>
+        </a-col>
+        
+        <a-col :xs="12" :sm="8" :md="6" :lg="4">
+          <a-select
+            v-model:value="selectedServiceId"
+            placeholder="選擇服務"
+            allow-clear
+            show-search
+            :filter-option="filterServiceOption"
+            style="width: 100%"
+            @change="handleFilterChange"
+          >
+            <a-select-option
+              v-for="service in supportData.services"
+              :key="service.service_id"
+              :value="service.service_id"
+            >
+              {{ service.service_name }}
+            </a-select-option>
+          </a-select>
+        </a-col>
+        
+        <a-col :xs="12" :sm="8" :md="6" :lg="4">
+          <a-select
+            v-model:value="selectedClientType"
+            placeholder="客戶類型"
+            allow-clear
+            style="width: 100%"
+            @change="handleFilterChange"
+          >
+            <a-select-option value="unified">統一模板</a-select-option>
+            <a-select-option value="specific">客戶專屬</a-select-option>
+          </a-select>
+        </a-col>
+        
+        <a-col :xs="24" :sm="24" :md="4" :lg="10" style="text-align: right">
+          <a-button type="primary" @click="handleAddTemplate">
+            <template #icon>
+              <plus-outlined />
+            </template>
+            新增模板
+          </a-button>
+        </a-col>
+      </a-row>
     </div>
 
     <!-- 查看模板（只讀模式） -->
@@ -163,17 +215,86 @@
         :loading="store.loading"
         @view="handleViewTemplate"
         @edit="handleEditTemplate"
-        @delete="handleDeleteTemplate"
+        @delete="handleDeleteClick"
       />
     </a-card>
+
+    <!-- 刪除確認對話框 -->
+    <a-modal
+      v-model:open="deleteConfirmVisible"
+      :title="deleteErrorData ? '無法刪除模板' : '確認刪除模板'"
+      :confirm-loading="deleting"
+      :width="600"
+      :ok-text="deleteErrorData ? '關閉' : '確認刪除'"
+      :ok-button-props="deleteErrorData ? {} : { danger: true }"
+      @ok="handleDeleteConfirm"
+      @cancel="handleDeleteCancel"
+    >
+      <div v-if="deleteErrorData">
+        <!-- 模板被使用的情況 -->
+        <a-alert
+          type="error"
+          :message="deleteErrorData.message || '無法刪除模板'"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+
+        <div style="margin-bottom: 16px">
+          <p style="margin-bottom: 8px; font-weight: 500;">
+            模板「<strong>{{ deleteErrorData.template_name || '未知模板' }}</strong>」正在被 <strong>{{ deleteErrorData.used_by_count || 0 }}</strong> 個服務使用，無法刪除：
+          </p>
+          <p style="color: #6b7280; font-size: 12px; margin-bottom: 12px;">
+            請先解除這些服務對該模板的綁定，然後再嘗試刪除。
+          </p>
+        </div>
+
+        <div v-if="deleteErrorData.used_by_services && deleteErrorData.used_by_services.length > 0" style="max-height: 300px; overflow-y: auto;">
+          <a-list
+            :data-source="deleteErrorData.used_by_services"
+            size="small"
+            bordered
+          >
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <a-list-item-meta>
+                  <template #title>
+                    <a-space>
+                      <span>{{ item.client_name || '未知客戶' }}</span>
+                      <a-divider type="vertical" />
+                      <span>{{ item.service_name || '未知服務' }}</span>
+                    </a-space>
+                  </template>
+                  <template #description>
+                    <span style="color: #8c8c8c; font-size: 12px;">
+                      服務 ID: {{ item.client_service_id }}
+                    </span>
+                  </template>
+                </a-list-item-meta>
+              </a-list-item>
+            </template>
+          </a-list>
+        </div>
+      </div>
+
+      <div v-else>
+        <!-- 正常確認刪除的情況 -->
+        <a-alert
+          type="warning"
+          message="確認刪除模板"
+          :description="`確定要刪除模板「${deletingTemplateName || '未知模板'}」嗎？此操作無法撤銷。`"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { useSettingsStore } from '@/stores/settings'
 import { usePageAlert } from '@/composables/usePageAlert'
 import TaskTemplateForm from '@/components/settings/TaskTemplateFormNew.vue'
@@ -191,6 +312,22 @@ const formVisible = ref(false)
 const editingTemplate = ref(null)
 const templateFormRef = ref(null)
 
+// 搜索和過濾狀態
+const searchKeyword = ref('')
+const selectedServiceId = ref(undefined)
+const selectedClientType = ref(undefined)
+
+// 防抖計時器
+let debounceTimer = null
+const DEBOUNCE_DELAY = 500 // 500ms 防抖延遲
+
+// 刪除確認對話框狀態
+const deleteConfirmVisible = ref(false)
+const deletingTemplateId = ref(null)
+const deletingTemplateName = ref('')
+const deleting = ref(false)
+const deleteErrorData = ref(null)
+
 // 查看模板狀態
 const viewMode = ref(false)
 const viewingTemplate = ref(null)
@@ -202,12 +339,45 @@ const getTemplateId = (template) => {
 }
 
 
+// 構建查詢選項
+const buildQueryOptions = () => {
+  const options = {}
+  
+  // 搜索關鍵詞
+  if (searchKeyword.value && searchKeyword.value.trim()) {
+    options.search = searchKeyword.value.trim()
+  }
+  
+  // 服務 ID 過濾
+  if (selectedServiceId.value !== undefined && selectedServiceId.value !== null) {
+    options.service_id = selectedServiceId.value
+  }
+  
+  // 客戶類型過濾
+  if (selectedClientType.value) {
+    options.client_type = selectedClientType.value
+  }
+  
+  return options
+}
+
+// 載入模板列表（帶查詢選項）
+const loadTemplates = async () => {
+  try {
+    const options = buildQueryOptions()
+    await store.getTaskTemplates(options)
+  } catch (err) {
+    console.error('載入模板列表失敗:', err)
+    // 錯誤已由 store 處理
+  }
+}
+
 // 載入數據
 const loadData = async () => {
   try {
     // 並行載入模板列表和支援數據
     await Promise.all([
-      store.getTaskTemplates(),
+      loadTemplates(),
       store.fetchSupportData(),
       store.getServiceSOPs()
     ])
@@ -215,6 +385,45 @@ const loadData = async () => {
     console.error('載入數據失敗:', err)
     // 錯誤已由 store 處理
   }
+}
+
+// 處理搜索輸入（帶防抖）
+const handleSearchInput = () => {
+  // 清除之前的計時器
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+  
+  // 設置新的防抖計時器
+  debounceTimer = setTimeout(() => {
+    loadTemplates()
+    debounceTimer = null
+  }, DEBOUNCE_DELAY)
+}
+
+// 處理搜索（立即執行，不防抖）
+const handleSearch = () => {
+  // 清除防抖計時器
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+  
+  // 立即執行搜索
+  loadTemplates()
+}
+
+// 處理過濾變化
+const handleFilterChange = () => {
+  // 過濾變化時立即執行，不防抖
+  loadTemplates()
+}
+
+// 服務選項過濾函數
+const filterServiceOption = (input, option) => {
+  const serviceName = option.children || ''
+  return serviceName.toLowerCase().indexOf(input.toLowerCase()) >= 0
 }
 
 // 處理新增模板
@@ -438,21 +647,75 @@ const handleEditTemplate = async (template) => {
   }
 }
 
-// 處理刪除模板
-const handleDeleteTemplate = async (templateId) => {
+// 處理刪除點擊（顯示確認對話框）
+const handleDeleteClick = (templateId) => {
+  // 查找模板信息
+  const template = store.taskTemplates.find(
+    t => (t.template_id || t.templateId) === templateId
+  )
+  
+  deletingTemplateId.value = templateId
+  deletingTemplateName.value = template?.template_name || template?.templateName || '未知模板'
+  deleteErrorData.value = null
+  deleteConfirmVisible.value = true
+}
+
+// 確認刪除
+const handleDeleteConfirm = async () => {
+  // 如果模板被使用，不執行刪除，只關閉對話框
+  if (deleteErrorData.value) {
+    handleDeleteCancel()
+    return
+  }
+  
+  if (!deletingTemplateId.value) return
+  
+  deleting.value = true
+  
   try {
-    const response = await store.deleteTaskTemplate(templateId)
+    const response = await store.deleteTaskTemplate(deletingTemplateId.value)
+    
     if (response.ok || response.data !== undefined) {
       showSuccess('刪除成功')
-      // 重新載入模板列表
-      await store.getTaskTemplates()
+      
+      // 關閉對話框
+      handleDeleteCancel()
+      
+      // 重新載入模板列表（保持當前搜索和過濾條件）
+      await loadTemplates()
     } else {
-      showError(response.message || '刪除失敗')
+      throw new Error(response.message || '刪除失敗')
     }
   } catch (err) {
     console.error('刪除模板失敗:', err)
-    showError(err.message || '刪除失敗')
+    
+    // 如果是 409 錯誤（模板被使用），更新錯誤數據並顯示服務列表
+    if (err?.response?.status === 409) {
+      const errorData = err?.response?.data?.data || err?.response?.data || {}
+      deleteErrorData.value = {
+        template_id: errorData.template_id || deletingTemplateId.value,
+        template_name: errorData.template_name || deletingTemplateName.value,
+        used_by_count: errorData.used_by_count || 0,
+        used_by_services: errorData.used_by_services || [],
+        message: errorData.message || err?.response?.data?.message || '無法刪除模板'
+      }
+      // 不關閉對話框，讓用戶看到服務列表
+    } else {
+      // 其他錯誤，顯示錯誤信息並關閉對話框
+      showError(err?.response?.data?.message || err?.message || '刪除失敗')
+      handleDeleteCancel()
+    }
+  } finally {
+    deleting.value = false
   }
+}
+
+// 取消刪除
+const handleDeleteCancel = () => {
+  deleteConfirmVisible.value = false
+  deleteErrorData.value = null
+  deletingTemplateId.value = null
+  deletingTemplateName.value = ''
 }
 
 // 處理表單提交
@@ -467,7 +730,7 @@ const handleFormSubmit = async (data, isEdit) => {
         showSuccess('更新成功')
         formVisible.value = false
         editingTemplate.value = null
-        await store.getTaskTemplates()
+        await loadTemplates()
       } else {
         showError(response.message || '更新失敗')
       }
@@ -478,7 +741,7 @@ const handleFormSubmit = async (data, isEdit) => {
         showSuccess('新增成功')
         formVisible.value = false
         editingTemplate.value = null
-        await store.getTaskTemplates()
+        await loadTemplates()
       } else {
         showError(response.message || '新增失敗')
       }
@@ -503,6 +766,14 @@ const handleCloseError = () => {
 // 載入
 onMounted(async () => {
   await loadData()
+})
+
+// 組件卸載前清理防抖計時器
+onBeforeUnmount(() => {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
 })
 </script>
 

@@ -11,16 +11,17 @@ import { generateCacheKey, getKVCache, saveKVCache, deleteKVCacheByPrefix } from
 export async function handleGetTaskDetail(request, env, ctx, requestId, match, url) {
   const taskId = match[1];
   
-  const cacheKey = generateCacheKey('task_detail', { taskId });
-  const kvCached = await getKVCache(env, cacheKey);
-  
-  if (kvCached?.data) {
-    return successResponse(kvCached.data, "查詢成功（KV缓存）", requestId);
-  }
+  // 不緩存任務詳情，確保每次查詢都是最新數據（特別是相關任務的篩選）
+  // const cacheKey = generateCacheKey('task_detail', { taskId });
+  // const kvCached = await getKVCache(env, cacheKey);
+  // 
+  // if (kvCached?.data) {
+  //   return successResponse(kvCached.data, "查詢成功（KV缓存）", requestId);
+  // }
   
   const task = await env.DATABASE.prepare(
     `SELECT t.task_id, t.task_type, t.due_date, t.status, t.assignee_user_id, t.notes, t.client_service_id,
-            t.completed_at, t.created_at, t.service_month, t.estimated_hours,
+            t.completed_at, t.created_at, t.service_month, t.service_year, t.estimated_hours,
             c.company_name AS client_name, c.tax_registration_number AS client_tax_id, c.client_id,
             s.service_name,
             (SELECT COUNT(1) FROM ActiveTaskStages stg WHERE stg.task_id = t.task_id) AS total_stages,
@@ -46,6 +47,7 @@ export async function handleGetTaskDetail(request, env, ctx, requestId, match, u
     client_id: task.client_id || "",
     service_name: task.service_name || "",
     service_month: task.service_month || "",
+    service_year: task.service_year || null,
     assignee_name: task.assignee_name || "",
     assignee_user_id: task.assignee_user_id || null,
     client_service_id: task.client_service_id || null,
@@ -91,11 +93,74 @@ export async function handleGetTaskDetail(request, env, ctx, requestId, match, u
     triggered_by: row.triggered_by
   }));
 
+  // 為每個階段獲取該任務所屬服務的相同年月任務，用於顯示該服務的整體情況
+  // 該任務的所屬服務應該已經先天篩選了年月，所以只需要查詢相同 client_service_id、service_year、service_month 的任務
+  const clientServiceId = task.client_service_id;
+  const serviceYear = Number(task.service_year);
+  const serviceMonth = Number(task.service_month);
+  
+  console.log(`[TaskDetail] 查詢相關任務: taskId=${taskId}, clientServiceId=${clientServiceId}, serviceYear=${serviceYear}, serviceMonth=${serviceMonth}`);
+  
+  if (clientServiceId && serviceYear && serviceMonth && Number.isFinite(serviceYear) && Number.isFinite(serviceMonth)) {
+    for (const stage of stages) {
+      // 查詢所有屬於該 client_service_id、相同 service_year、相同 service_month 且具有該 stage_order 的任務
+      // 這樣可以顯示該服務在該階段的所有任務（相同年月），看到整體情況
+      // 確保 service_year 和 service_month 都是有效的數字
+      const relatedTasksRows = await env.DATABASE.prepare(
+        `SELECT DISTINCT
+            t.task_id,
+            t.task_type,
+            t.status,
+            t.assignee_user_id,
+            u.name AS assignee_name,
+            st.status AS stage_status,
+            t.service_year,
+            t.service_month
+         FROM ActiveTasks t
+         INNER JOIN ActiveTaskStages st ON st.task_id = t.task_id
+         LEFT JOIN Users u ON u.user_id = t.assignee_user_id
+         WHERE t.client_service_id = ?
+           AND t.service_year IS NOT NULL
+           AND t.service_month IS NOT NULL
+           AND CAST(t.service_year AS INTEGER) = ?
+           AND CAST(t.service_month AS INTEGER) = ?
+           AND st.stage_order = ?
+           AND t.is_deleted = 0
+         ORDER BY t.task_id ASC`
+      ).bind(clientServiceId, serviceYear, serviceMonth, stage.stage_order).all();
+      
+      console.log(`[TaskDetail] 階段${stage.stage_order}查詢結果: ${relatedTasksRows?.results?.length || 0}個任務`, relatedTasksRows?.results?.map(r => ({ task_id: r.task_id, service_year: r.service_year, service_month: r.service_month })));
+
+      // 去重處理：使用 Map 確保每個 task_id 只出現一次
+      const taskMap = new Map();
+      (relatedTasksRows?.results || []).forEach((taskRow) => {
+        const taskId = Number(taskRow.task_id);
+        if (!taskMap.has(taskId)) {
+          taskMap.set(taskId, {
+            task_id: taskId,
+            task_name: taskRow.task_type || '',
+            task_status: taskRow.stage_status || taskRow.status || 'pending',
+            assignee_user_id: taskRow.assignee_user_id || null,
+            assignee_name: (taskRow.assignee_name && String(taskRow.assignee_name).trim() !== '') ? String(taskRow.assignee_name).trim() : null
+          });
+        }
+      });
+      
+      stage.tasks = Array.from(taskMap.values());
+    }
+  } else {
+    // 如果沒有 client_service_id、service_year 或 service_month，為每個階段設置空數組
+    stages.forEach(stage => {
+      stage.tasks = [];
+    });
+  }
+
   const currentStage = stages.find((stage) => stage.status !== 'completed');
   data.stages = stages;
   data.current_stage_id = currentStage ? currentStage.stage_id : null;
 
-  await saveKVCache(env, cacheKey, 'task_detail', data, { ttl: 1800 }).catch(() => {});
+  // 不緩存任務詳情，確保每次查詢都是最新數據
+  // await saveKVCache(env, cacheKey, 'task_detail', data, { ttl: 1800 }).catch(() => {});
   
   return successResponse(data, "查詢成功", requestId);
 }
@@ -112,8 +177,148 @@ export async function handleGetTasks(request, env, ctx, requestId, url) {
   }
   
   const params = url.searchParams;
+  
+  // 檢查任務生成狀態，確保不會顯示不全的任務
+  // 如果正在生成當月任務，返回生成狀態信息
+  // 如果沒有生成且用戶是管理員，觸發即時生成
+  const serviceMonthParam = params.get("service_month") || params.get("month");
+  const serviceYearParam = params.get("service_year") || params.get("year");
+  const triggerGeneration = params.get("trigger_generation") === "1"; // 是否觸發即時生成
+  
+  if (serviceYearParam && serviceMonthParam) {
+    const year = parseInt(serviceYearParam);
+    const month = parseInt(serviceMonthParam);
+    if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
+      const lockKey = `task_generation_lock_${year}_${month}`;
+      try {
+        const lockStatus = await env.CACHE.get(lockKey);
+        if (lockStatus) {
+          const status = JSON.parse(lockStatus);
+          if (status.status === 'generating' || status.status === 'partial') {
+            // 正在生成或部分完成，返回狀態信息
+            return successResponse(
+              { tasks: [], total: 0, page: 1, perPage: 50 },
+              `任務生成中（${status.processedServices || 0}/${status.totalServices || 0}），請稍後刷新`,
+              requestId,
+              {
+                generationStatus: status.status,
+                processedServices: status.processedServices || 0,
+                totalServices: status.totalServices || 0,
+                remainingServices: status.remainingServices || 0,
+                lastUpdated: status.lastUpdated || status.startedAt
+              }
+            );
+          }
+        }
+        
+        // 即時生成機制：如果用戶明確請求觸發生成，且沒有正在生成的鎖
+        // 所有登入用戶都可以觸發即時生成（因為生成的是他們負責的任務）
+        if (triggerGeneration && !lockStatus) {
+          // 檢查是否真的沒有任務（快速檢查）
+          // 只檢查當前用戶負責的任務，避免觸發不必要的生成
+          let hasTasks = false
+          if (user.is_admin) {
+            // 管理員檢查所有任務
+            const result = await env.DATABASE.prepare(
+              `SELECT COUNT(1) as count FROM ActiveTasks 
+               WHERE service_year = ? AND service_month = ? AND is_deleted = 0 
+               LIMIT 1`
+            ).bind(year, month).first()
+            hasTasks = Number(result?.count || 0) > 0
+          } else {
+            // 非管理員只檢查自己負責的任務
+            const result = await env.DATABASE.prepare(
+              `SELECT COUNT(1) as count FROM ActiveTasks 
+               WHERE service_year = ? AND service_month = ? AND is_deleted = 0 
+               AND assignee_user_id = ?
+               LIMIT 1`
+            ).bind(year, month, user.user_id).first()
+            hasTasks = Number(result?.count || 0) > 0
+          }
+          
+          if (Number(hasTasks?.count || 0) === 0) {
+            const now = new Date();
+            
+            // 設置鎖定狀態，防止重複觸發
+            await env.CACHE.put(lockKey, JSON.stringify({
+              status: 'generating',
+              startedAt: now.toISOString(),
+              lastUpdated: now.toISOString(),
+              processedServices: 0,
+              totalServices: 0,
+              remainingServices: 0,
+              isComplete: false,
+              iterations: 0,
+              totalQueries: 0,
+              requestId: requestId,
+              triggeredBy: 'on-demand'
+            }), { expirationTtl: 15 * 60 }); // 15分鐘
+            
+            // 異步觸發生成，不阻塞當前請求
+            // 使用 ctx.waitUntil 確保在 Worker 關閉前完成
+            if (ctx?.waitUntil) {
+              const { generateTasksForMonth } = await import("../task-generator/generator-new.js");
+              ctx.waitUntil(
+                generateTasksForMonth(env, year, month, { 
+                  now, 
+                  force: true,
+                  ctx: ctx
+                }).then(result => {
+                  console.log(`[TaskList] 即時生成完成：${result.generatedCount} 個任務`);
+                  // 更新鎖定狀態
+                  return env.CACHE.put(lockKey, JSON.stringify({
+                    status: result.isComplete ? 'completed' : 'partial',
+                    startedAt: now.toISOString(),
+                    lastUpdated: new Date().toISOString(),
+                    processedServices: result.processedServices || 0,
+                    totalServices: result.totalServices || 0,
+                    remainingServices: result.remainingServices || 0,
+                    isComplete: result.isComplete,
+                    iterations: 1,
+                    totalQueries: result.queryCount || 0,
+                    requestId: requestId,
+                    triggeredBy: 'on-demand'
+                  }), { expirationTtl: result.isComplete ? 3600 : 15 * 60 });
+                }).catch(err => {
+                  console.error("[TaskList] 即時生成任務失敗", err);
+                  // 清除鎖定狀態
+                  return env.CACHE.delete(lockKey).catch(() => {});
+                })
+              );
+            } else {
+              // 沒有 ctx，直接異步觸發（不等待）
+              const { generateTasksForMonth } = await import("../task-generator/generator-new.js");
+              generateTasksForMonth(env, year, month, { 
+                now, 
+                force: true,
+                ctx: null
+              }).catch(err => {
+                console.error("[TaskList] 即時生成任務失敗", err);
+                env.CACHE.delete(lockKey).catch(() => {});
+              });
+            }
+            
+            // 返回提示信息，讓前端知道已觸發生成
+            return successResponse(
+              { tasks: [], total: 0, page: 1, perPage: 50 },
+              "已觸發任務生成，請稍後刷新",
+              requestId,
+              {
+                generationStatus: 'triggered',
+                message: '已觸發即時生成，請稍後刷新查看任務'
+              }
+            );
+          }
+        }
+      } catch (err) {
+        console.warn("[TaskList] 檢查生成狀態失敗", err);
+        // 繼續正常查詢，不阻塞
+      }
+    }
+  }
   const page = Math.max(1, parseInt(params.get("page") || "1", 10));
-  const perPage = Math.min(100, Math.max(1, parseInt(params.get("perPage") || "20", 10)));
+  // 增加 perPage 限制到 1000，以支持一次性載入更多任務
+  const perPage = Math.min(1000, Math.max(1, parseInt(params.get("perPage") || "20", 10)));
   const offset = (page - 1) * perPage;
   const q = (params.get("q") || "").trim();
   const status = (params.get("status") || "").trim();
@@ -122,10 +327,12 @@ export async function handleGetTasks(request, env, ctx, requestId, url) {
   const serviceYear = (params.get("service_year") || "").trim();
   const serviceMonth = (params.get("service_month") || "").trim();
   const hideCompleted = params.get("hide_completed") === "1";
+  const canStart = params.get("can_start"); // "true" or "false" or null
   
   const cacheKey = generateCacheKey('tasks_list', {
     page, perPage, q, status, due, componentId, serviceYear, serviceMonth,
     hideCompleted: hideCompleted ? '1' : '0',
+    canStart: canStart || '',
     userId: user.is_admin ? 'all' : String(user.user_id)
   });
   
@@ -163,15 +370,49 @@ export async function handleGetTasks(request, env, ctx, requestId, url) {
   if (due === "soon") {
     where.push("date(t.due_date) BETWEEN date('now') AND date('now','+3 days')");
   }
+  // 修正：使用 service_year 和 service_month 兩個獨立字段進行篩選
   if (serviceYear && serviceMonth) {
-    where.push("t.service_month = ?");
-    binds.push(`${serviceYear}-${serviceMonth.padStart(2, '0')}`);
+    where.push("t.service_year = ? AND t.service_month = ?");
+    binds.push(parseInt(serviceYear), parseInt(serviceMonth));
   } else if (serviceYear) {
-    where.push("t.service_month LIKE ?");
-    binds.push(`${serviceYear}-%`);
+    where.push("t.service_year = ?");
+    binds.push(parseInt(serviceYear));
   }
   if (hideCompleted) {
     where.push("t.status != 'completed'");
+  }
+  
+  // Add can_start filter
+  if (canStart === "true" || canStart === "false") {
+    // Use the same logic as in SELECT clause to filter by can_start
+    const canStartValue = canStart === "true" ? 1 : 0;
+    where.push(`(
+      CASE 
+        -- No stages: can start
+        WHEN (SELECT COUNT(1) FROM ActiveTaskStages stg WHERE stg.task_id = t.task_id) = 0 THEN 1
+        -- All stages completed: can start (though task might be completed)
+        WHEN (SELECT MIN(stg.stage_order) FROM ActiveTaskStages stg WHERE stg.task_id = t.task_id AND stg.status != 'completed') IS NULL THEN 1
+        -- First stage (stage_order = 1) is not completed: can start
+        WHEN (SELECT MIN(stg.stage_order) FROM ActiveTaskStages stg WHERE stg.task_id = t.task_id AND stg.status != 'completed') = 1 THEN 1
+        -- Check if all preceding stages (before first non-completed) are completed
+        ELSE CASE 
+          WHEN (
+            SELECT COUNT(1) 
+            FROM ActiveTaskStages stg 
+            WHERE stg.task_id = t.task_id 
+            AND stg.stage_order < (
+              SELECT MIN(stg2.stage_order) 
+              FROM ActiveTaskStages stg2 
+              WHERE stg2.task_id = t.task_id 
+              AND stg2.status != 'completed'
+            )
+            AND stg.status != 'completed'
+          ) = 0 THEN 1
+          ELSE 0
+        END
+      END
+    ) = ?`);
+    binds.push(canStartValue);
   }
   
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -200,7 +441,39 @@ export async function handleGetTasks(request, env, ctx, requestId, url) {
               s.service_name,
               (SELECT COUNT(1) FROM ActiveTaskStages stg WHERE stg.task_id = t.task_id) AS total_stages,
               (SELECT COUNT(1) FROM ActiveTaskStages stg WHERE stg.task_id = t.task_id AND stg.status = 'completed') AS completed_stages,
-              u.name AS assignee_name
+              u.name AS assignee_name,
+              -- Calculate can_start: true if no stages, or if all preceding stages (before first non-completed stage) are completed
+              -- Logic: A task can start if there are no stages, or if the first non-completed stage has all preceding stages completed
+              CASE 
+                -- No stages: can start
+                WHEN (SELECT COUNT(1) FROM ActiveTaskStages stg WHERE stg.task_id = t.task_id) = 0 THEN 1
+                -- All stages completed: can start (though task might be completed)
+                WHEN (SELECT MIN(stg.stage_order) FROM ActiveTaskStages stg WHERE stg.task_id = t.task_id AND stg.status != 'completed') IS NULL THEN 1
+                -- First stage (stage_order = 1) is not completed: can start
+                WHEN (SELECT MIN(stg.stage_order) FROM ActiveTaskStages stg WHERE stg.task_id = t.task_id AND stg.status != 'completed') = 1 THEN 1
+                -- Check if all preceding stages (before first non-completed) are completed
+                ELSE CASE 
+                  WHEN (
+                    SELECT COUNT(1) 
+                    FROM ActiveTaskStages stg 
+                    WHERE stg.task_id = t.task_id 
+                    AND stg.stage_order < (
+                      SELECT MIN(stg2.stage_order) 
+                      FROM ActiveTaskStages stg2 
+                      WHERE stg2.task_id = t.task_id 
+                      AND stg2.status != 'completed'
+                    )
+                    AND stg.status != 'completed'
+                  ) = 0 THEN 1
+                  ELSE 0
+                END
+              END AS can_start,
+              -- Calculate is_overdue: due_date < current date AND status NOT IN ('completed', 'cancelled')
+              CASE 
+                WHEN t.due_date IS NULL THEN 0
+                WHEN date(t.due_date) < date('now') AND t.status NOT IN ('completed', 'cancelled') THEN 1
+                ELSE 0
+              END AS is_overdue
        FROM ActiveTasks t
        LEFT JOIN ClientServices cs ON cs.client_service_id = t.client_service_id
        LEFT JOIN Clients c ON c.client_id = cs.client_id
@@ -213,6 +486,45 @@ export async function handleGetTasks(request, env, ctx, requestId, url) {
   } catch (err) {
     console.error(`[Tasks] Select query error:`, err);
     throw err;
+  }
+  
+  // 獲取所有任務的階段資料
+  const taskIds = (rows?.results || []).map(r => r.task_id);
+  const stagesMap = new Map();
+  
+  if (taskIds.length > 0) {
+    try {
+      // 使用 IN 查詢獲取所有任務的階段
+      const placeholders = taskIds.map(() => '?').join(',');
+      const stagesRows = await env.DATABASE.prepare(
+        `SELECT 
+          task_id,
+          active_stage_id AS stage_id,
+          stage_name,
+          stage_order,
+          status
+         FROM ActiveTaskStages
+         WHERE task_id IN (${placeholders})
+         ORDER BY task_id, stage_order ASC`
+      ).bind(...taskIds).all();
+      
+      // 按 task_id 分組階段
+      (stagesRows?.results || []).forEach((row) => {
+        const taskId = row.task_id;
+        if (!stagesMap.has(taskId)) {
+          stagesMap.set(taskId, []);
+        }
+        stagesMap.get(taskId).push({
+          stage_id: Number(row.stage_id),
+          stage_name: row.stage_name,
+          stage_order: Number(row.stage_order || 0),
+          status: row.status
+        });
+      });
+    } catch (err) {
+      console.error(`[Tasks] Fetch stages error:`, err);
+      // 如果獲取階段失敗，繼續處理但不包含階段資料
+    }
   }
   
   const data = (rows?.results || []).map((r) => ({
@@ -229,10 +541,14 @@ export async function handleGetTasks(request, env, ctx, requestId, url) {
     assigneeName: r.assignee_name || "",
     assigneeUserId: r.assignee_user_id || null,
     progress: { completed: Number(r.completed_stages || 0), total: Number(r.total_stages || 0) },
+    totalStages: Number(r.total_stages || 0),
+    stages: stagesMap.get(r.task_id) || [], // 返回所有階段資料
     dueDate: r.due_date || null,
     status: r.status,
     notes: r.notes || "",
     hasSop: Number(r.has_sop || 0) === 1,
+    canStart: Boolean(r.can_start === 1),
+    isOverdue: Boolean(r.is_overdue === 1),
   }));
   
   const meta = { page, perPage, total, hasNext: offset + perPage < total };
@@ -459,6 +775,88 @@ export async function handleDeleteTask(request, env, ctx, requestId, match, url)
   await deleteKVCacheByPrefix(env, 'tasks_list').catch(() => {});
   
   return successResponse({ taskId }, "已刪除", requestId);
+}
+
+/**
+ * 獲取預設日期範圍
+ * 計算從最早有未完成任務的月份到當前月份
+ */
+export async function handleGetDefaultDateRange(request, env, ctx, requestId, url) {
+  const user = ctx?.user;
+  
+  // 驗證用戶身份
+  if (!user || !user.user_id) {
+    return errorResponse(401, "UNAUTHORIZED", "未登入或身份驗證失敗", null, requestId);
+  }
+  
+  try {
+    const where = ["t.is_deleted = 0"];
+    const binds = [];
+    
+    // 權限過濾：非管理員只能看到自己負責的任務
+    if (!user.is_admin) {
+      where.push("t.assignee_user_id = ?");
+      binds.push(String(user.user_id));
+    }
+    
+    // 只查詢未完成的任務（不包括已完成和已取消的）
+    where.push("t.status NOT IN ('completed', 'cancelled')");
+    
+    // 只查詢有 service_month 的任務
+    where.push("t.service_month IS NOT NULL AND t.service_month != ''");
+    
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    
+    // 查詢所有未完成任務的 service_month
+    const tasks = await env.DATABASE.prepare(
+      `SELECT DISTINCT t.service_month
+       FROM ActiveTasks t
+       LEFT JOIN ClientServices cs ON cs.client_service_id = t.client_service_id
+       LEFT JOIN Clients c ON c.client_id = cs.client_id
+       ${whereSql}
+       ORDER BY t.service_month ASC`
+    ).bind(...binds).all();
+    
+    // 獲取當前日期
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+    
+    // 如果沒有未完成任務，返回當前月份
+    if (!tasks || tasks.results.length === 0) {
+      return successResponse({
+        start_month: currentMonthStr,
+        end_month: currentMonthStr
+      }, "查詢成功", requestId);
+    }
+    
+    // 找出最早的月份
+    const months = tasks.results
+      .map(row => row.service_month)
+      .filter(month => month && /^\d{4}-\d{2}$/.test(month))
+      .sort();
+    
+    if (months.length === 0) {
+      // 如果沒有有效的月份格式，返回當前月份
+      return successResponse({
+        start_month: currentMonthStr,
+        end_month: currentMonthStr
+      }, "查詢成功", requestId);
+    }
+    
+    const earliestMonth = months[0];
+    
+    // 返回從最早月份到當前月份
+    return successResponse({
+      start_month: earliestMonth,
+      end_month: currentMonthStr
+    }, "查詢成功", requestId);
+    
+  } catch (err) {
+    console.error(`[Default Date Range] Query error:`, err);
+    return errorResponse(500, "INTERNAL_ERROR", `獲取預設日期範圍失敗: ${err.message || String(err)}`, null, requestId);
+  }
 }
 
 /**

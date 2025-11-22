@@ -14,3 +14,9 @@ ALTER TABLE Users ADD COLUMN plain_password TEXT;
 
 
 
+
+
+
+
+
+

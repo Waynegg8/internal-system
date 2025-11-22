@@ -17,6 +17,17 @@ export const costsRoutes = [
     methods: ["PUT", "DELETE"],
     handler: withAdmin(handleCosts),
   },
+  // 成本項目類型管理 - 設計文檔指定路徑
+  {
+    pattern: /^\/api\/v2\/costs\/items$/,
+    methods: ["GET", "POST"],
+    handler: withAdmin(handleCosts),
+  },
+  {
+    pattern: /^\/api\/v2\/costs\/items\/(\d+)$/,
+    methods: ["PUT", "DELETE"],
+    handler: withAdmin(handleCosts),
+  },
   {
     pattern: /^\/api\/v2\/admin\/cost-types$/,
     methods: ["GET", "POST"],
@@ -40,6 +51,17 @@ export const costsRoutes = [
   },
   {
     pattern: /^\/api\/v2\/costs\/overhead\/(\d+)$/,
+    methods: ["PUT", "DELETE"],
+    handler: withAdmin(handleCosts),
+  },
+  // 月度管理費用記錄 - 主要路由
+  {
+    pattern: /^\/api\/v2\/costs\/records$/,
+    methods: ["GET", "POST"],
+    handler: withAdmin(handleCosts),
+  },
+  {
+    pattern: /^\/api\/v2\/costs\/records\/(\d+)$/,
     methods: ["PUT", "DELETE"],
     handler: withAdmin(handleCosts),
   },
@@ -108,6 +130,12 @@ export const costsRoutes = [
   {
     pattern: /^\/api\/v2\/admin\/client-costs$/,
     methods: ["GET"],
+    handler: withAdmin(handleCosts),
+  },
+  // 成本分攤計算
+  {
+    pattern: /^\/api\/v2\/costs\/allocation\/calculate$/,
+    methods: ["POST"],
     handler: withAdmin(handleCosts),
   },
 ];

@@ -4,7 +4,7 @@
 
 import { successResponse, errorResponse } from "../../utils/response.js";
 import { calculateEmployeePayroll } from "../../utils/payroll-calculator.js";
-import { getReportCache, setReportCache } from "../../utils/report-cache.js";
+import { getReportCache, setReportCache, deleteReportCache } from "../../utils/report-cache.js";
 
 const REPORT_TYPE = "monthly-payroll";
 
@@ -203,21 +203,25 @@ export async function handleMonthlyPayroll(request, env, ctx, requestId, url) {
       return errorResponse(422, "VALIDATION_ERROR", "請選擇查詢月份", null, requestId);
     }
 
-    const period = formatMonth(year, month);
-    const cached = await getReportCache(env, REPORT_TYPE, period);
+    const forceRefresh = params.get("refresh") === "1";
 
-    if (cached?.data) {
+    const cached = await getReportCache(env, REPORT_TYPE, year, month);
+
+    if (!forceRefresh && cached?.data) {
       return successResponse(cached.data, "查詢成功", requestId, {
         cacheHit: true,
         cachedAt: cached.computedAt || null,
       });
+    } else {
+      await deleteReportCache(env, REPORT_TYPE, year, month).catch(() => {});
     }
 
     const data = await computeMonthlyPayroll(env, year, month);
-    await setReportCache(env, REPORT_TYPE, period, data);
+    await setReportCache(env, REPORT_TYPE, year, data, month);
 
     return successResponse(data, "查詢成功", requestId, {
       cacheHit: false,
+      refreshed: forceRefresh,
     });
   } catch (err) {
     console.error("[MonthlyPayroll] Error:", err);

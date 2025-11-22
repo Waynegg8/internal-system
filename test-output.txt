@@ -1,0 +1,639 @@
+
+Running 21 tests using 6 workers
+
+(node:26876) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37444) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36092) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40564) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30892) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6472) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26876) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37444) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36092) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40564) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30892) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6472) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0072887622'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763672887622'[39m,
+      taxId: [32m'72887622'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m524[39m,
+      clientId: [32m'0072887622'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m545[39m,
+      clientServiceId: [33m524[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m551[39m,
+      clientServiceId: [33m524[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m557[39m,
+      clientServiceId: [33m524[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0072887471'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763672887471'[39m,
+      taxId: [32m'72887471'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m523[39m,
+      clientId: [32m'0072887471'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m546[39m,
+      clientServiceId: [33m523[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m552[39m,
+      clientServiceId: [33m523[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m558[39m,
+      clientServiceId: [33m523[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0072887573'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763672887573'[39m,
+      taxId: [32m'72887573'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m525[39m,
+      clientId: [32m'0072887573'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m547[39m,
+      clientServiceId: [33m525[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m553[39m,
+      clientServiceId: [33m525[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m559[39m,
+      clientServiceId: [33m525[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0072887743'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763672887743'[39m,
+      taxId: [32m'72887743'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m526[39m,
+      clientId: [32m'0072887743'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m548[39m,
+      clientServiceId: [33m526[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m554[39m,
+      clientServiceId: [33m526[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m560[39m,
+      clientServiceId: [33m526[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0072887784'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763672887784'[39m,
+      taxId: [32m'72887784'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m527[39m,
+      clientId: [32m'0072887784'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m549[39m,
+      clientServiceId: [33m527[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m555[39m,
+      clientServiceId: [33m527[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m561[39m,
+      clientServiceId: [33m527[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0072887886'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763672887886'[39m,
+      taxId: [32m'72887886'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m528[39m,
+      clientId: [32m'0072887886'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m550[39m,
+      clientServiceId: [33m528[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m556[39m,
+      clientServiceId: [33m528[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m562[39m,
+      clientServiceId: [33m528[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+  ok  1 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:84:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.1: 任務自動生成邏輯 › 管理員應該能夠手動觸發任務生成 (5.3s)
+  ok  2 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:493:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.6: 任務生成歷史記錄 › 歷史記錄應該支持按客戶篩選 (5.1s)
+  ok  3 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:304:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.4: 固定期限任務處理 › 固定期限任務應該正確標記 (6.3s)
+  ok  8 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:516:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.6: 任務生成歷史記錄 › 歷史記錄應該支持按生成狀態篩選 (6.0s)
+  ok  7 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:102:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.1: 任務自動生成邏輯 › 系統應該檢查任務是否已存在（避免重複生成） (6.1s)
+  ok 10 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:540:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.6: 任務生成歷史記錄 › 歷史記錄應該包含生成的任務列表 (5.1s)
+  ok  4 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:594:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.6: 任務生成歷史記錄 › 員工不應該能夠查看任務生成歷史 (8.3s)
+  ok 11 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:131:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.1: 任務自動生成邏輯 › 系統應該記錄任務生成歷史 (6.1s)
+  ok  9 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:339:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.5: 任務生成預覽 › 管理員應該能夠查看任務生成預覽 (21.7s)
+
+  x   5 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:401:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.5: 任務生成預覽 › 員工不應該能夠查看任務生成預覽 (20.6s)
+Internal error: step id not found: fixture@191(node:18448) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18448) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  x   6 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:196:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.2: 任務生成時間計算 › 應該正確計算「前一個月最後X天」生成時間 (22.3s)
+Internal error: step id not found: fixture@193(node:31300) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31300) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0072928909'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763672928909'[39m,
+      taxId: [32m'72928909'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m529[39m,
+      clientId: [32m'0072928909'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m563[39m,
+      clientServiceId: [33m529[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m564[39m,
+      clientServiceId: [33m529[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m565[39m,
+      clientServiceId: [33m529[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0072931825'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763672931825'[39m,
+      taxId: [32m'72931825'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m530[39m,
+      clientId: [32m'0072931825'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m566[39m,
+      clientServiceId: [33m530[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m567[39m,
+      clientServiceId: [33m530[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m568[39m,
+      clientServiceId: [33m530[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+  ok 13 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:163:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.2: 任務生成時間計算 › 應該正確計算「服務月份開始時」生成時間 (21.2s)
+  ok 14 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:357:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.5: 任務生成預覽 › 預覽應該顯示完整月份視圖 (20.9s)
+
+  x  12 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:563:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.6: 任務生成歷史記錄 › 前端歷史記錄頁面應該正確顯示 (31.7s)
+  ok 16 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:233:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.2: 任務生成時間計算 › 應該處理月份天數不足的情況 (21.0s)
+
+  x  15 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:419:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.5: 任務生成預覽 › 前端預覽模態框應該正確顯示 (16.6s)
+Internal error: step id not found: fixture@113Internal error: step id not found: fixture@193(node:31384) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31384) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 17 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:378:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.5: 任務生成預覽 › 預覽應該顯示生成時間和到期日 (21.0s)
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0072966665'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763672966665'[39m,
+      taxId: [32m'72966665'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m531[39m,
+      clientId: [32m'0072966665'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m569[39m,
+      clientServiceId: [33m531[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m570[39m,
+      clientServiceId: [33m531[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m571[39m,
+      clientServiceId: [33m531[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+  ok 19 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:457:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.6: 任務生成歷史記錄 › 管理員應該能夠查看任務生成歷史 (4.9s)
+  ok 18 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:251:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.3: 任務到期日計算 › 應該正確計算到期日 (21.3s)
+  ok 20 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:469:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.6: 任務生成歷史記錄 › 歷史記錄應該支持按時間範圍篩選 (5.1s)
+  ok 21 [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:273:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.3: 任務到期日計算 › 應該正確標記固定期限任務 (20.6s)
+
+
+  1) [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:196:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.2: 任務生成時間計算 › 應該正確計算「前一個月最後X天」生成時間 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m2[39m
+    Received: [31m3[39m
+
+      224 |           const genDate = new Date(task.generation_time)
+      225 |           expect(genDate.getFullYear()).toBe(2024)
+    > 226 |           expect(genDate.getMonth() + 1).toBe(2) // 2月
+          |                                          ^
+      227 |           expect(genDate.getDate()).toBeGreaterThanOrEqual(27)
+      228 |           expect(genDate.getDate()).toBeLessThanOrEqual(29)
+      229 |         }
+        at C:\Users\miama\Desktop\system-new\tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:226:42
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\tasks-task-auto-generation-f89ab-生成時間計算-應該正確計算「前一個月最後X天」生成時間-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:401:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.5: 任務生成預覽 › 員工不應該能夠查看任務生成預覽 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoMatch[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected pattern: [32m/403|401|FORBIDDEN|UNAUTHORIZED/[39m
+    Received string:  [31m"[2mexpect([22m[31mreceived[39m[31m[2m).[22mtoBeFalsy[2m()[22m·[39m
+    [31mReceived: [31mtrue[39m[31m"[39m
+
+      413 |       } catch (error: any) {
+      414 |         // 應該拋出錯誤（403 或 401）
+    > 415 |         expect(error.message).toMatch(/403|401|FORBIDDEN|UNAUTHORIZED/)
+          |                               ^
+      416 |       }
+      417 |     })
+      418 |
+        at C:\Users\miama\Desktop\system-new\tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:415:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-d6436--5-5-任務生成預覽-員工不應該能夠查看任務生成預覽-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-d6436--5-5-任務生成預覽-員工不應該能夠查看任務生成預覽-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\tasks-task-auto-generation-d6436--5-5-任務生成預覽-員工不應該能夠查看任務生成預覽-chromium\error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-d6436--5-5-任務生成預覽-員工不應該能夠查看任務生成預覽-chromium\test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-d6436--5-5-任務生成預覽-員工不應該能夠查看任務生成預覽-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\tasks-task-auto-generation-d6436--5-5-任務生成預覽-員工不應該能夠查看任務生成預覽-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:419:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.5: 任務生成預覽 › 前端預覽模態框應該正確顯示 
+
+    TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('.ant-modal, [role="dialog"]') to be visible[22m
+
+
+      437 |
+      438 |       // 等待模態框出現（使用更寬鬆的選擇器）
+    > 439 |       await page.waitForSelector('.ant-modal, [role="dialog"]', { timeout: 10000 })
+          |                  ^
+      440 |
+      441 |       // 驗證模態框標題（使用更寬鬆的選擇器）
+      442 |       const modalTitle = page.locator('.ant-modal-title, [class*="modal-title"]').first()
+        at C:\Users\miama\Desktop\system-new\tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:439:18
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-bb619-R2-5-5-任務生成預覽-前端預覽模態框應該正確顯示-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-bb619-R2-5-5-任務生成預覽-前端預覽模態框應該正確顯示-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\tasks-task-auto-generation-bb619-R2-5-5-任務生成預覽-前端預覽模態框應該正確顯示-chromium\error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-bb619-R2-5-5-任務生成預覽-前端預覽模態框應該正確顯示-chromium\test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-bb619-R2-5-5-任務生成預覽-前端預覽模態框應該正確顯示-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\tasks-task-auto-generation-bb619-R2-5-5-任務生成預覽-前端預覽模態框應該正確顯示-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:563:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.6: 任務生成歷史記錄 › 前端歷史記錄頁面應該正確顯示 
+
+    TimeoutError: page.waitForSelector: Timeout 5000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('.ant-empty, .ant-alert') to be visible[22m
+
+
+      578 |           } catch {
+      579 |             // 如果找不到，檢查是否有錯誤提示或空狀態
+    > 580 |             await page.waitForSelector('.ant-empty, .ant-alert', { timeout: 5000 })
+          |                        ^
+      581 |           }
+      582 |         }
+      583 |       }
+        at C:\Users\miama\Desktop\system-new\tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:580:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-0a2c3-5-6-任務生成歷史記錄-前端歷史記錄頁面應該正確顯示-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-0a2c3-5-6-任務生成歷史記錄-前端歷史記錄頁面應該正確顯示-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\tasks-task-auto-generation-0a2c3-5-6-任務生成歷史記錄-前端歷史記錄頁面應該正確顯示-chromium\error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-0a2c3-5-6-任務生成歷史記錄-前端歷史記錄頁面應該正確顯示-chromium\test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\tasks-task-auto-generation-0a2c3-5-6-任務生成歷史記錄-前端歷史記錄頁面應該正確顯示-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\tasks-task-auto-generation-0a2c3-5-6-任務生成歷史記錄-前端歷史記錄頁面應該正確顯示-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:196:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.2: 任務生成時間計算 › 應該正確計算「前一個月最後X天」生成時間 
+    [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:401:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.5: 任務生成預覽 › 員工不應該能夠查看任務生成預覽 
+    [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:419:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.5: 任務生成預覽 › 前端預覽模態框應該正確顯示 
+    [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:563:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.6: 任務生成歷史記錄 › 前端歷史記錄頁面應該正確顯示 
+  17 passed (2.2m)

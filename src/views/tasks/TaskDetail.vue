@@ -46,7 +46,6 @@
         <TaskStagesPanel
           :stages="taskStages"
           :loading="loading || store.stageUpdating"
-          @edit-stage="handleEditStage"
         />
 
         <!-- 關聯的 SOP -->
@@ -58,13 +57,10 @@
           @update="handleSOPUpdate"
         />
 
-        <!-- 任務文檔 -->
-        <TaskDocuments
+        <!-- 任務附件（任務文檔） -->
+        <TaskAttachments
           :task-id="taskId"
-          :documents="store.taskDocuments"
-          :loading="loading"
-          @upload-success="handleDocumentUpload"
-          @delete-success="handleDocumentDelete"
+          @attachment-click="handleAttachmentClick"
         />
       </div>
     </a-spin>
@@ -90,6 +86,15 @@
       :task-id="taskId"
       :loading="loading"
     />
+
+    <!-- 階段同步確認彈窗 -->
+    <StageSyncConfirmModal
+      v-model:open="stageSyncConfirmVisible"
+      :next-stage="pendingSyncStage"
+      :confirming="store.stageUpdating"
+      @confirm="handleStageSyncConfirm"
+      @cancel="handleStageSyncCancel"
+    />
   </div>
 </template>
 
@@ -102,11 +107,12 @@ import { ArrowLeftOutlined } from '@ant-design/icons-vue'
 import { useTaskStore } from '@/stores/tasks'
 import TaskBasicInfo from '@/components/tasks/TaskBasicInfo.vue'
 import TaskSOPList from '@/components/tasks/TaskSOPList.vue'
-import TaskDocuments from '@/components/tasks/TaskDocuments.vue'
+import TaskAttachments from '@/components/tasks/TaskAttachments.vue'
 import TaskStagesPanel from '@/components/tasks/TaskStagesPanel.vue'
 import TaskStageUpdateModal from '@/components/tasks/TaskStageUpdateModal.vue'
 import UpdateStatusModal from '@/components/tasks/UpdateStatusModal.vue'
 import AdjustmentHistoryModal from '@/components/tasks/AdjustmentHistoryModal.vue'
+import StageSyncConfirmModal from '@/components/tasks/StageSyncConfirmModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -124,6 +130,9 @@ const updateStatusModalVisible = ref(false)
 const adjustmentHistoryModalVisible = ref(false)
 const stageModalVisible = ref(false)
 const selectedStage = ref(null)
+const stageSyncConfirmVisible = ref(false)
+const pendingSyncStage = ref(null)
+const pendingStageUpdate = ref(null) // 保存待確認的階段更新數據
 
 // 載入數據
 const loadData = async () => {
@@ -134,7 +143,6 @@ const loadData = async () => {
       store.fetchSupportData(),
       store.fetchTaskDetail(taskId.value),
       store.fetchTaskSOPs(taskId.value),
-      store.fetchTaskDocuments(taskId.value)
     ])
   } catch (err) {
     // 處理 404 錯誤
@@ -192,18 +200,11 @@ const handleSOPUpdate = async () => {
   }
 }
 
-// 處理文檔上傳成功
-const handleDocumentUpload = async () => {
-  if (taskId.value) {
-    await store.fetchTaskDocuments(taskId.value)
-  }
-}
 
-// 處理文檔刪除成功
-const handleDocumentDelete = async () => {
-  if (taskId.value) {
-    await store.fetchTaskDocuments(taskId.value)
-  }
+// 處理附件點擊
+const handleAttachmentClick = (attachment) => {
+  // 可以在這裡處理附件點擊事件，例如記錄日誌等
+  console.log('附件被點擊:', attachment)
 }
 
 // 處理編輯階段
@@ -214,19 +215,68 @@ const handleEditStage = (stage) => {
   stageModalVisible.value = true
 }
 
-const handleStageSubmit = async ({ stageId, status, delay_days, notes }) => {
+const handleStageSubmit = async ({ stageId, status, delay_days, notes, confirm_sync }) => {
   if (!taskId.value || !stageId) return
   try {
     await store.updateTaskStage(taskId.value, stageId, {
       status,
       delay_days,
-      notes
+      notes,
+      confirm_sync
     })
     showSuccess('階段已更新')
     stageModalVisible.value = false
+    stageSyncConfirmVisible.value = false
+    pendingSyncStage.value = null
+    pendingStageUpdate.value = null
   } catch (err) {
+    // 檢查是否需要確認階段同步
+    const errorResponse = err.response?.data || err
+    const statusCode = err.response?.status || err.status
+    
+    // 檢查是否是 428 狀態碼或 SYNC_CONFIRMATION_REQUIRED 錯誤碼
+    if (statusCode === 428 || errorResponse?.code === 'SYNC_CONFIRMATION_REQUIRED' || errorResponse?.errors?.requires_confirmation) {
+      // 需要確認，顯示確認對話框
+      const nextStageInfo = errorResponse?.errors?.next_stage || errorResponse?.data?.next_stage
+      if (nextStageInfo) {
+        pendingSyncStage.value = {
+          stage_id: nextStageInfo.stage_id,
+          stage_name: nextStageInfo.stage_name,
+          stage_order: nextStageInfo.stage_order,
+          message: errorResponse?.errors?.message || errorResponse?.message || '需要確認階段同步'
+        }
+        pendingStageUpdate.value = { stageId, status, delay_days, notes }
+        stageSyncConfirmVisible.value = true
+        // 不關閉階段更新彈窗，等待用戶確認
+        return
+      }
+    }
+    // 其他錯誤
     showError(err.message || store.stageError || '更新階段失敗')
   }
+}
+
+// 處理階段同步確認
+const handleStageSyncConfirm = async () => {
+  if (!pendingStageUpdate.value) return
+  
+  try {
+    await handleStageSubmit({
+      ...pendingStageUpdate.value,
+      confirm_sync: true
+    })
+  } catch (err) {
+    showError(err.message || store.stageError || '階段同步失敗')
+  }
+}
+
+// 處理階段同步取消
+const handleStageSyncCancel = () => {
+  pendingSyncStage.value = null
+  pendingStageUpdate.value = null
+  stageSyncConfirmVisible.value = false
+  // 關閉階段更新彈窗
+  stageModalVisible.value = false
 }
 
 // 監聽路由參數變化

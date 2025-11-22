@@ -1,0 +1,52 @@
+
+Running 1 test using 1 worker
+
+
+
+[1A[2K(node:7820) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K(node:7820) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[1/1] [chromium] › tests\e2e\tasks\task-generation-performance-quick.spec.ts:11:3 › 任務生成性能快速測試 › 測試現有數據的任務生成性能
+[1A[2K[chromium] › tests\e2e\tasks\task-generation-performance-quick.spec.ts:11:3 › 任務生成性能快速測試 › 測試現有數據的任務生成性能
+[性能測試] 開始測試 2025-11 的任務生成
+
+[1A[2K  1) [chromium] › tests\e2e\tasks\task-generation-performance-quick.spec.ts:11:3 › 任務生成性能快速測試 › 測試現有數據的任務生成性能 
+
+    Error: API 請求失敗: 500 Internal Server Error, 響應: {"ok":false,"code":"INTERNAL_ERROR","message":"任務生成失敗: allDataRows is not defined","meta":{"requestId":"req_8b9ee998743d65c7"},"errors":{"error":"allDataRows is not defined","stack":"ReferenceError: allDataRows is not defined\n    at generateTasksForMonth (index.js:1962:174)\n    at async handleManualTaskGeneration (index.js:26060:21)\n    at async matchRoute (index.js:28285:26)\n    at async Object.fetch (index.js:28340:24)"}}
+
+       at utils\test-data.ts:188
+
+      186 |     }
+      187 |     
+    > 188 |     throw new Error(errorMsg)
+          |           ^
+      189 |   }
+      190 |
+      191 |   // 獲取響應文本
+        at callAPI (C:\Users\miama\Desktop\system-new\tests\e2e\utils\test-data.ts:188:11)
+        at C:\Users\miama\Desktop\system-new\tests\e2e\tasks\task-generation-performance-quick.spec.ts:26:22
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\tasks-task-generation-perf-94989-ck-任務生成性能快速測試-測試現有數據的任務生成性能-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\tasks-task-generation-perf-94989-ck-任務生成性能快速測試-測試現有數據的任務生成性能-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\tasks-task-generation-perf-94989-ck-任務生成性能快速測試-測試現有數據的任務生成性能-chromium\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\tasks-task-generation-perf-94989-ck-任務生成性能快速測試-測試現有數據的任務生成性能-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\tasks-task-generation-perf-94989-ck-任務生成性能快速測試-測試現有數據的任務生成性能-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K  1 failed
+    [chromium] › tests\e2e\tasks\task-generation-performance-quick.spec.ts:11:3 › 任務生成性能快速測試 › 測試現有數據的任務生成性能 

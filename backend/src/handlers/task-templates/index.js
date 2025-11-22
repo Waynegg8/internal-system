@@ -4,6 +4,7 @@
 
 import { errorResponse, successResponse } from "../../utils/response.js";
 import { handleGetTaskTemplates, handleGetTaskTemplateDetail, handleCreateTaskTemplate, handleUpdateTaskTemplate, handleDeleteTaskTemplate } from "./template-crud.js";
+import { handleGetStages, handleUpdateStageNames, handleSyncStages } from "./task-template-stages.js";
 
 // 任务模板阶段管理函数
 async function handleGetTemplateStages(env, templateId) {
@@ -120,14 +121,25 @@ export async function handleTaskTemplates(request, env, ctx, requestId, match, u
     
     // GET /api/v2/settings/task-templates/:id/stages - 获取模板阶段列表
     if (method === "GET" && path.match(/^\/api\/v2\/settings\/task-templates\/(\d+)\/stages$/)) {
-      const templateId = match[1];
-      const stages = await handleGetTemplateStages(env, templateId);
-      return successResponse(stages, "查詢成功", requestId);
+      // 使用路由匹配器傳遞的 match 參數（如果存在），否則從路徑重新匹配
+      const stagesMatch = match && match[1] ? match : path.match(/^\/api\/v2\/settings\/task-templates\/(\d+)\/stages$/);
+      console.log('[Task Templates] GET stages - match:', match, 'stagesMatch:', stagesMatch, 'path:', path, 'url:', url);
+      try {
+        return await handleGetStages(request, env, ctx, requestId, stagesMatch, url);
+      } catch (err) {
+        console.error('[Task Templates] Error calling handleGetStages:', err);
+        console.error('[Task Templates] Error stack:', err.stack);
+        throw err; // 重新拋出錯誤，讓外層 catch 處理
+      }
     }
     
     // POST /api/v2/settings/task-templates/:id/stages - 创建模板阶段
-    if (method === "POST" && path.match(/^\/api\/v2\/settings\/task-templates\/(\d+)\/stages$/)) {
-      const templateId = match[1];
+    const postStagesMatch = path.match(/^\/api\/v2\/settings\/task-templates\/(\d+)\/stages$/);
+    if (method === "POST" && postStagesMatch) {
+      const templateId = parseInt(postStagesMatch[1], 10);
+      if (!templateId || templateId <= 0) {
+        return errorResponse(400, "INVALID_ID", "模板ID無效", null, requestId);
+      }
       const body = await request.json();
       
       if (!body?.stage_name) {
@@ -139,9 +151,13 @@ export async function handleTaskTemplates(request, env, ctx, requestId, match, u
     }
     
     // PUT /api/v2/settings/task-templates/:id/stages/:stageId - 更新模板阶段
-    if (method === "PUT" && path.match(/^\/api\/v2\/settings\/task-templates\/(\d+)\/stages\/(\d+)$/)) {
-      const templateId = match[1];
-      const stageId = match[2];
+    const putStageMatch = path.match(/^\/api\/v2\/settings\/task-templates\/(\d+)\/stages\/(\d+)$/);
+    if (method === "PUT" && putStageMatch) {
+      const templateId = parseInt(putStageMatch[1], 10);
+      const stageId = parseInt(putStageMatch[2], 10);
+      if (!templateId || templateId <= 0 || !stageId || stageId <= 0) {
+        return errorResponse(400, "INVALID_ID", "模板ID或階段ID無效", null, requestId);
+      }
       const body = await request.json();
       
       await handleUpdateTemplateStage(env, templateId, stageId, body);
@@ -149,19 +165,43 @@ export async function handleTaskTemplates(request, env, ctx, requestId, match, u
     }
     
     // DELETE /api/v2/settings/task-templates/:id/stages/:stageId - 删除模板阶段
-    if (method === "DELETE" && path.match(/^\/api\/v2\/settings\/task-templates\/(\d+)\/stages\/(\d+)$/)) {
-      const templateId = match[1];
-      const stageId = match[2];
+    const deleteStageMatch = path.match(/^\/api\/v2\/settings\/task-templates\/(\d+)\/stages\/(\d+)$/);
+    if (method === "DELETE" && deleteStageMatch) {
+      const templateId = parseInt(deleteStageMatch[1], 10);
+      const stageId = parseInt(deleteStageMatch[2], 10);
+      if (!templateId || templateId <= 0 || !stageId || stageId <= 0) {
+        return errorResponse(400, "INVALID_ID", "模板ID或階段ID無效", null, requestId);
+      }
       
       await handleDeleteTemplateStage(env, templateId, stageId);
       return successResponse({ stage_id: stageId }, "已刪除", requestId);
+    }
+    
+    // PUT /api/v2/settings/task-templates/:id/stages/batch - 批量更新階段名稱和順序
+    const batchMatch = path.match(/^\/api\/v2\/settings\/task-templates\/(\d+)\/stages\/batch$/);
+    if (method === "PUT" && batchMatch) {
+      return await handleUpdateStageNames(request, env, ctx, requestId, batchMatch, url);
+    }
+    
+    // POST /api/v2/settings/task-templates/:id/stages/sync - 同步階段變更到服務配置
+    const syncMatch = path.match(/^\/api\/v2\/settings\/task-templates\/(\d+)\/stages\/sync$/);
+    if (method === "POST" && syncMatch) {
+      return await handleSyncStages(request, env, ctx, requestId, syncMatch, url);
     }
     
     return errorResponse(404, "NOT_FOUND", "路由不存在", null, requestId);
     
   } catch (err) {
     console.error(`[Task Templates] Error:`, err);
-    return errorResponse(500, "INTERNAL_ERROR", "伺服器錯誤", null, requestId);
+    console.error(`[Task Templates] Error details:`, {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+      path: path,
+      method: method,
+      match: match
+    });
+    return errorResponse(500, "INTERNAL_ERROR", `伺服器錯誤: ${err.message}`, { error: err.message, stack: err.stack }, requestId);
   }
 }
 

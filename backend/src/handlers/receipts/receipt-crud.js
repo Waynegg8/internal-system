@@ -3,6 +3,7 @@
  */
 
 import { successResponse, errorResponse } from "../../utils/response.js";
+import { invalidateCacheByDataType, extractYearFromDate } from "../../utils/cache-invalidation.js";
 
 /**
  * 获取收据列表
@@ -10,13 +11,16 @@ import { successResponse, errorResponse } from "../../utils/response.js";
 export async function handleGetReceipts(request, env, ctx, requestId, url) {
   const params = url.searchParams;
   const page = Math.max(1, parseInt(params.get("page") || "1", 10));
-  const perPage = Math.min(100, Math.max(1, parseInt(params.get("perPage") || "20", 10)));
-  const offset = (page - 1) * perPage;
+  const pageSize = Math.min(100, Math.max(1, parseInt(params.get("page_size") || "20", 10)));
+  const offset = (page - 1) * pageSize;
   const q = (params.get("q") || "").trim();
   const status = (params.get("status") || "").trim();
   const receiptType = (params.get("receipt_type") || "").trim();
   const dateFrom = (params.get("dateFrom") || "").trim();
   const dateTo = (params.get("dateTo") || "").trim();
+  const clientId = (params.get("client_id") || "").trim();
+  const billingMonth = (params.get("billing_month") || "").trim();
+  const billingYear = (params.get("billing_year") || "").trim();
   
   const where = ["r.is_deleted = 0"];
   const binds = [];
@@ -32,6 +36,26 @@ export async function handleGetReceipts(request, env, ctx, requestId, url) {
   if (receiptType && ["normal", "prepayment", "deposit"].includes(receiptType)) {
     where.push("r.receipt_type = ?");
     binds.push(receiptType);
+  }
+  if (clientId) {
+    where.push("r.client_id = ?");
+    binds.push(clientId);
+  }
+  if (billingMonth) {
+    // 篩選 billing_month（收費月份，1-12）
+    const month = parseInt(billingMonth, 10);
+    if (month >= 1 && month <= 12) {
+      where.push("r.billing_month = ?");
+      binds.push(month);
+    }
+  }
+  if (billingYear) {
+    // 篩選 billing_year（收費年度），基於 service_start_month
+    const year = parseInt(billingYear, 10);
+    if (year > 0) {
+      where.push("strftime('%Y', r.service_start_month) = ?");
+      binds.push(year.toString());
+    }
   }
   if (dateFrom) {
     where.push("r.receipt_date >= ?");
@@ -50,14 +74,14 @@ export async function handleGetReceipts(request, env, ctx, requestId, url) {
   const total = Number(countRow?.total || 0);
   
   const rows = await env.DATABASE.prepare(
-    `SELECT r.receipt_id, r.client_id, c.company_name AS client_name, c.tax_registration_number AS client_tax_id, 
+    `SELECT r.receipt_id, r.client_id, c.company_name AS client_name, c.tax_registration_number AS client_tax_id,
             r.total_amount, r.receipt_date, r.due_date, r.status, r.receipt_type,
             r.service_month, r.service_start_month, r.service_end_month
      FROM Receipts r LEFT JOIN Clients c ON c.client_id = r.client_id
      ${whereSql}
      ORDER BY r.receipt_date DESC, r.receipt_id DESC
      LIMIT ? OFFSET ?`
-  ).bind(...binds, perPage, offset).all();
+  ).bind(...binds, pageSize, offset).all();
   
   // 为每条收据查询服务名称
   const receiptIds = (rows?.results || []).map(r => r.receipt_id);
@@ -99,7 +123,26 @@ export async function handleGetReceipts(request, env, ctx, requestId, url) {
     const paidAmount = paidAmountsMap[r.receipt_id] || 0;
     const totalAmount = Number(r.total_amount || 0);
     const remainingAmount = totalAmount - paidAmount;
-    
+
+    // 計算逾期狀態和逾期天數
+    let isOverdue = false;
+    let overdueDays = null;
+    const status = r.status || "unpaid";
+    const dueDate = r.due_date;
+
+    if (dueDate && (status === 'unpaid' || status === 'partial')) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(dueDate + 'T00:00:00Z');
+
+      if (due < today) {
+        isOverdue = true;
+        // 計算逾期天數：今天 - 到期日期
+        const diffTime = today.getTime() - due.getTime();
+        overdueDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      }
+    }
+
     return {
       receipt_id: String(r.receipt_id),
       client_id: r.client_id,
@@ -109,17 +152,19 @@ export async function handleGetReceipts(request, env, ctx, requestId, url) {
       paid_amount: paidAmount,
       remaining_amount: remainingAmount,
       receipt_date: r.receipt_date || null,
-      due_date: r.due_date || null,
-      status: r.status || "unpaid",
+      due_date: dueDate,
+      status: status,
       receipt_type: r.receipt_type || "normal",
       service_names: serviceNamesMap[r.receipt_id] || [],
       service_month: r.service_start_month || null, // 兼容舊資料，實際使用 service_start_month
       service_start_month: r.service_start_month || null,
-      service_end_month: r.service_end_month || null
+      service_end_month: r.service_end_month || null,
+      is_overdue: isOverdue,
+      overdue_days: overdueDays
     };
   });
   
-  const meta = { page, perPage, total, hasNext: offset + perPage < total };
+  const meta = { page, pageSize, total, hasNext: offset + pageSize < total };
   
   return successResponse(data, "成功", requestId, meta);
 }
@@ -169,6 +214,16 @@ export async function handleGetReceiptDetail(request, env, ctx, requestId, match
      FROM ReceiptServiceTypes rst
      LEFT JOIN Services s ON s.service_id = rst.service_id
      WHERE rst.receipt_id = ?`
+  ).bind(receiptId).all();
+
+  // 查询编辑历史
+  const editHistory = await env.DATABASE.prepare(
+    `SELECT reh.field_name, reh.old_value, reh.new_value, reh.modified_at,
+            u.name AS modified_by_name
+     FROM ReceiptEditHistory reh
+     LEFT JOIN Users u ON u.user_id = reh.modified_by
+     WHERE reh.receipt_id = ?
+     ORDER BY reh.modified_at DESC`
   ).bind(receiptId).all();
 
   const paidAmount = payments.results?.reduce((sum, p) => sum + Number(p.payment_amount || 0), 0) || 0;
@@ -222,6 +277,13 @@ export async function handleGetReceiptDetail(request, env, ctx, requestId, match
     service_types: (serviceTypes.results || []).map(row => ({
       service_id: Number(row.service_id),
       service_name: row.service_name || ""
+    })),
+    edit_history: (editHistory.results || []).map(row => ({
+      field_name: row.field_name,
+      old_value: row.old_value,
+      new_value: row.new_value,
+      modified_at: row.modified_at,
+      modified_by_name: row.modified_by_name || ""
     })),
     created_at: receipt.created_at,
     updated_at: receipt.updated_at
@@ -367,6 +429,17 @@ export async function handleCreateReceipt(request, env, ctx, requestId, url) {
       }
     }
     
+    // 失效相關年度報表快取
+    const receiptDate = body.receipt_date || body.service_start_month;
+    if (receiptDate) {
+      const year = extractYearFromDate(receiptDate);
+      if (year) {
+        await invalidateCacheByDataType(env, "receipts", year).catch((err) => {
+          console.warn("[CreateReceipt] 失效快取失敗:", err);
+        });
+      }
+    }
+    
     return successResponse({ receipt_id: receiptId, total_amount: totalAmount }, "收據已創建", requestId);
   } catch (error) {
     console.error(`[CreateReceipt] Error:`, error);
@@ -492,6 +565,29 @@ export async function handleUpdateReceipt(request, env, ctx, requestId, match, u
   }
 
   const now = new Date().toISOString();
+  const userId = ctx?.user?.user_id || 1; // 預設為系統用戶 ID
+
+  // 記錄編輯歷史的輔助函數
+  async function recordEditHistory(receiptId, fieldName, oldValue, newValue) {
+    if (oldValue === newValue) return; // 值沒有變化，不記錄
+
+    try {
+      await env.DATABASE.prepare(
+        `INSERT INTO ReceiptEditHistory (receipt_id, field_name, old_value, new_value, modified_by, modified_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).bind(
+        receiptId,
+        fieldName,
+        oldValue !== null && oldValue !== undefined ? JSON.stringify(oldValue) : null,
+        newValue !== null && newValue !== undefined ? JSON.stringify(newValue) : null,
+        userId,
+        now
+      ).run();
+    } catch (err) {
+      console.warn(`[RecordEditHistory] 無法記錄編輯歷史 ${fieldName}:`, err);
+      // 不中斷主要流程
+    }
+  }
 
   try {
     const updateColumns = [
@@ -524,6 +620,17 @@ export async function handleUpdateReceipt(request, env, ctx, requestId, match, u
       now,
       receiptId
     ).run();
+
+    // 記錄編輯歷史
+    await recordEditHistory(receiptId, 'client_id', existing.client_id, payload.client_id);
+    await recordEditHistory(receiptId, 'receipt_date', existing.receipt_date, payload.receipt_date);
+    await recordEditHistory(receiptId, 'due_date', existing.due_date, payload.due_date);
+    await recordEditHistory(receiptId, 'status', existing.status, payload.status);
+    await recordEditHistory(receiptId, 'receipt_type', existing.receipt_type, payload.receipt_type);
+    await recordEditHistory(receiptId, 'total_amount', Number(existing.total_amount), payload.total_amount);
+    await recordEditHistory(receiptId, 'notes', existing.notes, payload.notes);
+    await recordEditHistory(receiptId, 'service_start_month', existing.service_start_month, payload.service_start_month);
+    await recordEditHistory(receiptId, 'service_end_month', existing.service_end_month, payload.service_end_month);
 
     if (normalizedItems.length > 0) {
       await env.DATABASE.prepare(
@@ -568,6 +675,35 @@ export async function handleUpdateReceipt(request, env, ctx, requestId, match, u
     console.error("[UpdateReceipt] Error:", err);
     return errorResponse(500, "INTERNAL_ERROR", "更新收據失敗", null, requestId);
   }
+
+  // 失效相關年度報表快取（從現有收據和更新後的日期中提取年份）
+  try {
+    const years = new Set();
+    if (existing.receipt_date) {
+      const year = extractYearFromDate(existing.receipt_date);
+      if (year) years.add(year);
+    }
+    if (existing.service_start_month) {
+      const year = extractYearFromDate(existing.service_start_month);
+      if (year) years.add(year);
+    }
+    if (payload.receipt_date) {
+      const year = extractYearFromDate(payload.receipt_date);
+      if (year) years.add(year);
+    }
+    if (payload.service_start_month) {
+      const year = extractYearFromDate(payload.service_start_month);
+      if (year) years.add(year);
+    }
+    
+    for (const year of years) {
+      await invalidateCacheByDataType(env, "receipts", year).catch((err) => {
+        console.warn("[UpdateReceipt] 失效快取失敗:", err);
+      });
+    }
+  } catch (err) {
+    console.warn("[UpdateReceipt] 失效快取時發生錯誤:", err);
+  }
  
   return successResponse({ receipt_id: receiptId }, "收據已更新", requestId);
 }
@@ -579,9 +715,9 @@ export async function handleDeleteReceipt(request, env, ctx, requestId, match, u
   const receiptId = match[1];
   
   try {
-    // 檢查收據是否存在
+    // 檢查收據是否存在，並獲取日期信息用於失效快取
     const receipt = await env.DATABASE.prepare(
-      `SELECT receipt_id FROM Receipts WHERE receipt_id = ? AND is_deleted = 0`
+      `SELECT receipt_id, receipt_date, service_start_month FROM Receipts WHERE receipt_id = ? AND is_deleted = 0`
     ).bind(receiptId).first();
     
     if (!receipt) {
@@ -602,6 +738,23 @@ export async function handleDeleteReceipt(request, env, ctx, requestId, match, u
     await env.DATABASE.prepare(
       `DELETE FROM Receipts WHERE receipt_id = ?`
     ).bind(receiptId).run();
+    
+    // 失效相關年度報表快取
+    const years = new Set();
+    if (receipt.receipt_date) {
+      const year = extractYearFromDate(receipt.receipt_date);
+      if (year) years.add(year);
+    }
+    if (receipt.service_start_month) {
+      const year = extractYearFromDate(receipt.service_start_month);
+      if (year) years.add(year);
+    }
+    
+    for (const year of years) {
+      await invalidateCacheByDataType(env, "receipts", year).catch((err) => {
+        console.warn("[DeleteReceipt] 失效快取失敗:", err);
+      });
+    }
     
     return successResponse({ receipt_id: receiptId }, "收據已刪除", requestId);
   } catch (err) {

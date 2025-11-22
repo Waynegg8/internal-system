@@ -199,7 +199,7 @@ async function autoAdjustDependentTasks(env, taskId, userId) {
 /**
  * 记录任务状态更新
  */
-async function recordStatusUpdate(env, taskId, newStatus, userId, notes = {}) {
+export async function recordStatusUpdate(env, taskId, newStatus, userId, notes = {}) {
   try {
     // 先获取当前状态
     const task = await env.DATABASE.prepare(`
@@ -253,7 +253,7 @@ async function recordStatusUpdate(env, taskId, newStatus, userId, notes = {}) {
 /**
  * 记录到期日调整
  */
-async function recordDueDateAdjustment(
+export async function recordDueDateAdjustment(
   env,
   taskId,
   oldDueDate,
@@ -369,12 +369,12 @@ export async function handleUpdateTaskStatus(request, env, ctx, requestId, match
       return errorResponse(403, "FORBIDDEN", "無權限更新此任務", null, requestId);
     }
     
-    // 检查是否逾期
+    // 检查是否逾期（基于当前状态，用于验证）
     const today = new Date().toISOString().split('T')[0];
-    const isOverdue = task.due_date && task.due_date < today && task.current_status !== 'completed';
+    const currentIsOverdue = task.due_date && task.due_date < today && task.current_status !== 'completed' && task.current_status !== 'cancelled';
     
     // 如果任务逾期，必须填写逾期原因
-    if (isOverdue && !overdue_reason) {
+    if (currentIsOverdue && !overdue_reason) {
       errors.push({ field: 'overdue_reason', message: '任務逾期，必須填寫逾期原因' });
     }
     
@@ -396,13 +396,17 @@ export async function handleUpdateTaskStatus(request, env, ctx, requestId, match
       completedAt = new Date().toISOString();
     }
     
+    // 计算更新后的 is_overdue 状态
+    // 逻辑：due_date < current date AND status NOT IN ('completed', 'cancelled')
+    const newIsOverdue = task.due_date && task.due_date < today && status !== 'completed' && status !== 'cancelled';
+    
     await env.DATABASE.prepare(`
       UPDATE ActiveTasks
       SET status = ?,
           completed_at = ?,
           is_overdue = ?
       WHERE task_id = ?
-    `).bind(status, completedAt, isOverdue ? 1 : 0, taskId).run();
+    `).bind(status, completedAt, newIsOverdue ? 1 : 0, taskId).run();
     
     // 如果任务完成，自动调整后续依赖任务
     if (status === 'completed') {
@@ -599,6 +603,7 @@ async function handleUpdateTaskStage(request, env, ctx, requestId, match, url) {
   const targetStatus = body?.status;
   const delayDays = body?.delay_days !== undefined ? Number(body.delay_days) : null;
   const triggerNotes = (body?.notes || "").trim();
+  const confirmSync = body?.confirm_sync === true; // 階段同步確認標誌
 
   const errors = [];
   if (targetStatus && !allowedStatuses.includes(targetStatus)) {
@@ -715,9 +720,9 @@ async function handleUpdateTaskStage(request, env, ctx, requestId, match, url) {
       });
     }
 
-    // 自動啟動下一階段
+    // 自動啟動下一階段（需要確認）
     const nextStageRow = await env.DATABASE.prepare(
-      `SELECT active_stage_id AS stage_id
+      `SELECT active_stage_id AS stage_id, stage_name, stage_order
        FROM ActiveTaskStages
        WHERE task_id = ? AND stage_order > ?
        ORDER BY stage_order ASC
@@ -726,6 +731,28 @@ async function handleUpdateTaskStage(request, env, ctx, requestId, match, url) {
 
     if (nextStageRow) {
       const nextStageId = nextStageRow.stage_id;
+      const nextStageName = nextStageRow.stage_name || `階段 ${nextStageRow.stage_order}`;
+      
+      // 如果需要同步但未確認，返回需要確認的響應
+      if (!confirmSync) {
+        return errorResponse(
+          428, // 428 Precondition Required
+          "SYNC_CONFIRMATION_REQUIRED",
+          "需要確認階段同步",
+          {
+            requires_confirmation: true,
+            next_stage: {
+              stage_id: nextStageId,
+              stage_name: nextStageName,
+              stage_order: nextStageRow.stage_order
+            },
+            message: `完成當前階段後，下一階段「${nextStageName}」將自動啟動。請確認是否繼續。`
+          },
+          requestId
+        );
+      }
+
+      // 已確認，執行階段同步
       await env.DATABASE.prepare(
         `UPDATE ActiveTaskStages
          SET status = 'in_progress',
@@ -733,7 +760,7 @@ async function handleUpdateTaskStage(request, env, ctx, requestId, match, url) {
              triggered_at = ?,
              triggered_by = ?
          WHERE active_stage_id = ? AND status != 'completed'`
-      ).bind(nowIso, nowIso, 'system:auto_start', nextStageId).run();
+      ).bind(nowIso, nowIso, `user:${user.user_id}`, nextStageId).run();
 
       const nextStageBundle = await getStageWithTask(env, nextStageId);
       nextStageData = nextStageBundle ? nextStageBundle.stage : null;
@@ -742,11 +769,14 @@ async function handleUpdateTaskStage(request, env, ctx, requestId, match, url) {
         await insertTaskEvent(env, {
           taskId,
           stageId: nextStageId,
-          eventType: "stage_auto_start",
-          triggeredBy: "system:auto_start",
+          eventType: "stage_status_changed",
+          triggeredBy: `user:${user.user_id}`,
           payload: {
-            stageName: nextStageData.stage_name,
-            stageOrder: nextStageData.stage_order,
+            old_status: nextStageData.status || 'pending',
+            new_status: 'in_progress',
+            stage_name: nextStageData.stage_name,
+            stage_order: nextStageData.stage_order,
+            confirmed_by_user: true
           },
         });
       }
@@ -761,17 +791,30 @@ async function handleUpdateTaskStage(request, env, ctx, requestId, match, url) {
 
       const completedAtIso = nowIso;
       const completedDate = completedAtIso.split('T')[0];
+      // 任务完成时，is_overdue 应该为 0（完成的任务不标记为逾期）
+      // 逻辑：due_date < current date AND status NOT IN ('completed', 'cancelled')
+      // 由于状态是 'completed'，所以 is_overdue = 0
       await env.DATABASE.prepare(
         `UPDATE ActiveTasks
          SET status = 'completed',
              completed_at = ?,
              completed_date = ?,
-             is_overdue = CASE WHEN due_date IS NOT NULL AND due_date < ? THEN 1 ELSE 0 END
+             is_overdue = 0
          WHERE task_id = ?`
-      ).bind(completedAtIso, completedDate, completedDate, taskId).run();
+      ).bind(completedAtIso, completedDate, taskId).run();
 
       await recordStatusUpdate(env, taskId, 'completed', user.user_id, { source: 'stage_auto' }).catch(() => {});
       await autoAdjustDependentTasks(env, taskId, user.user_id).catch(() => {});
+      
+      // 處理固定期限任務邏輯
+      try {
+        const { handleFixedDeadlineTaskLogic } = await import("../task-generator/fixed-deadline-handler.js");
+        await handleFixedDeadlineTaskLogic(env, taskId, user.user_id).catch((err) => {
+          console.error("[Tasks] 固定期限任務處理失敗:", err);
+        });
+      } catch (err) {
+        console.warn("[Tasks] 無法載入固定期限任務處理模組:", err);
+      }
 
       const context = await env.DATABASE.prepare(
         `SELECT 

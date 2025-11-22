@@ -123,7 +123,10 @@ const formatFileSize = (attachment) => {
 }
 
 const loadAttachment = async () => {
+  console.log('[AttachmentPreview] loadAttachment called, attachment:', props.attachment)
+  
   if (!props.attachment) {
+    console.log('[AttachmentPreview] No attachment, clearing state')
     blobUrl.value = null
     textContent.value = ''
     pdfData.value = null
@@ -132,6 +135,7 @@ const loadAttachment = async () => {
   }
 
   if (fileType.value === 'other') {
+    console.log('[AttachmentPreview] File type is other, skipping load')
     blobUrl.value = null
     textContent.value = ''
     pdfData.value = null
@@ -143,7 +147,10 @@ const loadAttachment = async () => {
   error.value = null
 
   try {
-    const attachmentId = props.attachment.id || props.attachment.attachment_id
+    // 使用統一的 getAttachmentId 函數
+    const attachmentId = getAttachmentId(props.attachment)
+    console.log('[AttachmentPreview] loadAttachment - attachmentId:', attachmentId, 'attachment:', props.attachment, 'fileType:', fileType.value)
+    
     if (!attachmentId) {
       throw new Error('無法獲取附件 ID')
     }
@@ -191,7 +198,10 @@ const handleDownload = async () => {
 
   downloading.value = true
   try {
-    const attachmentId = props.attachment.id || props.attachment.attachment_id
+    // 使用統一的 getAttachmentId 函數
+    const attachmentId = getAttachmentId(props.attachment)
+    console.log('[AttachmentPreview] handleDownload - attachmentId:', attachmentId)
+    
     if (!attachmentId) {
       throw new Error('無法獲取附件 ID')
     }
@@ -222,16 +232,29 @@ const handleRetry = () => {
   loadAttachment()
 }
 
+// 支持多種 ID 字段名稱的輔助函數
+const getAttachmentId = (attachment) => {
+  if (!attachment) return null
+  return attachment.id || 
+         attachment.attachment_id || 
+         attachment.document_id || 
+         attachment.file_id
+}
+
 watch(
   () => props.attachment,
   (newAttachment, oldAttachment) => {
-    const newId = newAttachment?.id || newAttachment?.attachment_id
-    const oldId = oldAttachment?.id || oldAttachment?.attachment_id
-    if (newId !== oldId) {
+    const newId = getAttachmentId(newAttachment)
+    const oldId = getAttachmentId(oldAttachment)
+    
+    console.log('[AttachmentPreview] watch attachment change - newId:', newId, 'oldId:', oldId, 'newAttachment:', newAttachment)
+    
+    if (newId !== oldId || (newAttachment && !oldAttachment)) {
+      console.log('[AttachmentPreview] Triggering loadAttachment, newId:', newId)
       loadAttachment()
     }
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 )
 
 onUnmounted(() => {
@@ -245,12 +268,13 @@ onUnmounted(() => {
 
 <style scoped>
 .attachment-preview {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  padding: 12px;
-  min-height: 0;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  flex: 1 !important;
 }
 
 .attachment-preview :deep(.ant-spin-container),
@@ -263,13 +287,12 @@ onUnmounted(() => {
 
 .preview-container {
   width: 100%;
-  flex: none;
+  flex: 1;
   display: flex;
   flex-direction: column;
   position: relative;
   min-height: 0;
   overflow: hidden;
-  height: var(--knowledge-preview-height, 560px);
 }
 
 .preview-image {

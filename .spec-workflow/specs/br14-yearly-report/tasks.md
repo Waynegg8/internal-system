@@ -1,0 +1,265 @@
+# Tasks Document: BR14: 年度報表
+
+## 三方差異分析結果
+
+### 已實現功能
+- ✅ 年度收款報表基本功能（年末逾期未收正確取 12 月底餘額）
+- ✅ 年度薪資報表基本功能（自動補齊缺失月份快取，0 值正確處理）
+- ✅ 年度員工產值分析基本功能（使用總工時分配收入，成本只計算底薪×12）
+- ✅ 年度客戶毛利分析基本功能（使用 getAnnualRevenueByClient，成本使用固定時薪，服務類型使用加權工時比例）
+- ✅ 年度客戶毛利分析快取機制
+- ✅ 所有報表組件金額格式化為 0 位小數
+- ✅ 年度報表狀態管理（reports.js store）
+- ✅ 權限控制（僅管理員可訪問）
+
+### 待實現/修正功能
+- ❌ 年度員工產值分析使用標準工時分配收入（目前使用總工時）
+- ❌ 年度員工產值分析成本計算包含管理費分攤（目前只計算底薪×12）
+- ❌ 年度客戶毛利分析使用 BR1 應計收入邏輯（需要確認 getAnnualRevenueByClient 是否使用 BR1）
+- ❌ 年度客戶毛利分析成本計算基於員工實際時薪（目前使用固定時薪 500）
+- ❌ 年度客戶毛利分析服務類型收入分配使用 BR1 邏輯（目前使用加權工時比例）
+- ❌ 所有年度報表 Handler 支援 refresh 參數（目前都不支援）
+- ❌ 年度收款、薪資、員工產值報表添加快取機制（目前只有客戶毛利有快取）
+- ❌ 快取自動失效機制
+- ❌ 前端統一刷新按鈕
+- ❌ 錯誤詳情顯示按鈕
+- ❌ 前端 API 函數支援 refresh 參數
+- ❌ E2E 測試
+
+---
+
+- [x] 1. 驗證年度收款報表計算函數
+  - File: backend/src/handlers/reports/annual-revenue.js
+  - Function: computeAnnualRevenue
+  - 已實現：年末逾期未收正確取 12 月底餘額而非全年累計
+  - Purpose: 確保年末逾期未收反映實際的應收帳款狀況
+  - _Leverage: backend/src/handlers/reports/monthly-revenue.js, backend/src/utils/response.js_
+  - _Requirements: BR14.1_
+  - _Status: 已完成 - 代碼中正確實現了 latestOverdueOutstanding 邏輯_
+
+- [x] 2. 驗證年度薪資報表計算函數
+  - File: backend/src/handlers/reports/annual-payroll.js
+  - Function: computeAnnualPayroll, ensurePayrollCacheForYear
+  - 已實現：自動補齊缺失月份薪資快取，如果計算結果為 0 正確顯示 0
+  - Purpose: 確保年度薪資報表數據完整，即使某月沒有薪資數據也正確顯示
+  - _Leverage: backend/src/handlers/payroll/index.js, backend/src/utils/response.js_
+  - _Requirements: BR14.2_
+  - _Status: 已完成 - 包含 ensurePayrollCacheForYear 函數和 0 值正確處理_
+
+- [x] 3. 修改年度員工產值分析計算函數使用標準工時分配
+  - File: backend/src/handlers/reports/annual-employee-performance.js
+  - Function: computeAnnualEmployeePerformance
+  - 員工收入分配需改用標準工時（排除加班工時）進行分配，目前使用的是總工時
+  - Purpose: 確保員工產值分析使用正確的收入分配方式，避免加班影響產值分配
+  - 計算每個員工在每個客戶的標準工時（只計算 work_type = 1, 7, 10，且固定8小時班別每日最多8小時）
+  - 計算每個客戶的總標準工時
+  - 按標準工時比例分配收入：員工收入 = 客戶收入 × (員工標準工時 / 客戶總標準工時)
+  - 移除原有的總工時計算邏輯（`clientData.hours / clientTotalHours`）
+  - 使用 `getTimesheetMonthlyStats` 的 `standard_hours` 或自行計算標準工時
+  - _Leverage: backend/src/utils/payroll-helpers.js (getTimesheetMonthlyStats 的 standard_hours), backend/src/handlers/reports/work-types.js_
+  - _Requirements: BR14.3_
+  - _Prompt: Role: Backend Developer with expertise in employee performance calculations | Task: Modify computeAnnualEmployeePerformance function to use standard hours (excluding overtime) for revenue allocation instead of total hours. Standard hours definition: work_type=1 (full), work_type=7,10 (max 8 hours per day), work_type=2,3,4,5,6,8,9,11,12 (excluded). Calculate standard hours for each employee per client, then allocate revenue by standard hours ratio | Restrictions: Must correctly calculate standard hours for each client, must exclude overtime hours, must handle fixed 8h types correctly (max 8h per day), must maintain existing calculation logic for other fields | Success: Function uses standard hours for revenue allocation correctly, overtime hours are excluded, fixed 8h types are handled correctly, allocation ratio is accurate_
+
+- [x] 4. 修改年度員工產值分析成本計算包含管理費分攤
+  - File: backend/src/handlers/reports/annual-employee-performance.js
+  - Function: computeAnnualEmployeePerformance
+  - 員工成本計算：全年薪資成本（應發）+ 全年管理費分攤
+  - Purpose: 確保員工成本計算完整，包含管理費分攤
+  - 移除原有的簡單計算（`baseSalary * 12`）
+  - 計算全年薪資成本（應發）：從 PayrollCache 表讀取或調用 `calculateEmployeePayroll` 計算
+  - 計算全年管理費分攤：從 OverheadCosts 表讀取，支援 per_employee 和 per_hour 兩種分配方式
+  - 員工年度成本 = 全年薪資成本（應發）+ 全年管理費分攤
+  - 同時修改月度趨勢的成本計算，也包含管理費分攤
+  - _Leverage: backend/src/utils/payroll-calculator.js (calculateEmployeePayroll), PayrollCache 表, OverheadCosts 表_
+  - _Requirements: BR14.3_
+  - _Completed: 已修改成本計算邏輯，全年薪資成本從 PayrollCache 獲取（不存在時使用 calculateEmployeePayroll），全年管理費分攤從 OverheadCosts 表獲取，支援 per_employee 和 per_hour 兩種分配方式。同時修改了月度趨勢的成本計算，也包含管理費分攤。所有計算都包含錯誤處理，確保缺失數據時不會導致計算失敗。_
+
+- [x] 5. 驗證並修正年度客戶毛利分析收入計算使用 BR1 邏輯
+  - File: backend/src/handlers/reports/revenue-allocation.js
+  - Function: getAnnualRevenueByClient
+  - 客戶收入計算：已修改為使用 BR1 應計收入邏輯
+  - Purpose: 確保客戶收入計算使用正確的 BR1 應計收入邏輯
+  - 已驗證 `calculateAnnualAccruedRevenueByClient` 使用 BR1 邏輯（定期服務按執行次數比例分攤，一次性服務直接使用實際金額）
+  - 已修改 `getAnnualRevenueByClient` 使用 `calculateAnnualAccruedRevenueByClient`，取代原有的 Receipts 表查詢
+  - 保持向後兼容性：函數簽名和返回格式不變
+  - _Leverage: backend/src/utils/billing-calculator.js (calculateAnnualAccruedRevenueByClient, calculateAccruedRevenue), BillingPlans 表, ClientServices 表（execution_months）_
+  - _Requirements: BR14.4_
+  - _Completed: 已修改 getAnnualRevenueByClient 函數，使用 calculateAnnualAccruedRevenueByClient（已實現 BR1.3.3 邏輯）取代原有的 Receipts 表查詢。calculateAnnualAccruedRevenueByClient 使用 calculateAccruedRevenue，後者調用 calculateRecurringServiceRevenue 和 calculateOneTimeServiceRevenue，完全遵循 BR1.3.3 規則：定期服務按執行次數比例分攤，一次性服務直接使用實際金額。函數簽名和返回格式保持不變，確保向後兼容性。_
+
+- [x] 6. 修改年度客戶毛利分析成本計算基於員工實際時薪
+  - File: backend/src/handlers/reports/annual-client-profitability.js
+  - Function: computeAnnualClientProfitability
+  - 客戶成本計算：基於員工實際時薪（已包含管理費分攤）
+  - Purpose: 確保客戶成本計算準確，基於員工實際時薪而非固定時薪
+  - 已移除固定時薪計算（`DEFAULT_AVG_HOURLY_RATE = 500`）
+  - 已創建 `calculateAllEmployeesAnnualActualHourlyRate` 函數計算員工年度實際時薪
+  - 員工實際時薪 = (全年薪資成本（應發）+ 全年管理費分攤) / 全年工時
+  - 客戶成本 = Σ(各員工實際時薪 × 該員工在該客戶的工時)
+  - 注意：員工實際時薪已包含管理費分攤，不再額外加管理費
+  - _Leverage: backend/src/utils/payroll-calculator.js (calculateEmployeePayroll), PayrollCache 表, OverheadCosts 表, Timesheets 表_
+  - _Requirements: BR14.4_
+  - _Completed: 已創建 calculateAllEmployeesAnnualActualHourlyRate 函數，計算每個員工的年度實際時薪（全年薪資成本（應發）+ 全年管理費分攤）/ 全年工時。已修改 computeAnnualClientProfitability 函數，使用員工實際時薪計算客戶成本，取代固定的 DEFAULT_AVG_HOURLY_RATE。客戶成本計算為所有員工的 (員工實際時薪 × 該員工為該客戶的工時) 的總和。管理費已經包含在時薪中，不再單獨添加。所有計算都包含錯誤處理，確保缺失數據時不會導致計算失敗。_
+
+- [x] 7. 修改年度客戶毛利分析服務類型收入分配使用 BR1 邏輯
+  - File: backend/src/handlers/reports/annual-client-profitability.js
+  - Function: getAnnualServiceTypeDetails
+  - 服務類型收入分配：已改用 BR1 邏輯，按執行次數比例分攤
+  - Purpose: 確保服務類型收入分配使用正確的 BR1 邏輯
+  - 已移除原有的加權工時計算邏輯（`service.weightedHours / totalWeightedHours`）
+  - 定期服務：使用 `calculateRecurringServiceRevenue`，按執行次數比例分攤，直接使用 `annualAllocatedRevenue`
+  - 一次性服務：使用 `calculateOneTimeServiceRevenue`，直接使用收費計劃實際金額，累加所有月份的月度收入
+  - 已使用 BillingPlans 和 ClientServices 表，完全遵循 BR1.3.3 規則
+  - _Leverage: backend/src/utils/billing-calculator.js (calculateRecurringServiceRevenue, calculateOneTimeServiceRevenue), BillingPlans 表, ClientServices 表（execution_months）_
+  - _Requirements: BR14.4_
+  - _Completed: 已重構 getAnnualServiceTypeDetails 函數，使用 BR1.3.3 邏輯取代加權工時比例計算。定期服務使用 calculateRecurringServiceRevenue，按執行次數比例分攤，直接使用 annualAllocatedRevenue。一次性服務使用 calculateOneTimeServiceRevenue，直接使用收費計劃實際金額，年度收入 = 累加所有月份的月度收入。函數簽名和返回格式保持不變，確保向後兼容性。_
+
+- [x] 8. 為年度報表添加快取機制
+  - Files:
+    - backend/src/utils/report-cache.js
+    - backend/src/handlers/reports/annual-revenue.js
+    - backend/src/handlers/reports/annual-payroll.js
+    - backend/src/handlers/reports/annual-employee-performance.js
+    - backend/src/handlers/reports/annual-client-profitability.js
+    - backend/src/handlers/reports/precompute.js
+  - Functions: handleAnnualRevenue, handleAnnualPayroll, handleAnnualEmployeePerformance
+  - 快取鍵格式：annual:{year}:{reportType}
+  - 支援 refresh 參數強制重新計算
+  - 已更新所有年度報表使用統一的快取格式
+  - _Leverage: backend/src/utils/report-cache.js (getReportCache, setReportCache, deleteReportCache)_
+  - _Requirements: BR14.5_
+  - _Completed: 已更新 report-cache.js 支援年度格式（annual:{year}:{reportType}），為 annual-revenue、annual-payroll、annual-employee-performance 三個年度報表添加快取機制和 refresh 參數支援。同時更新 annual-client-profitability 和 precompute.js 使用新的年度快取格式。所有年度報表現在都支援快取檢查、refresh 參數強制重新計算，並使用統一的快取鍵格式。_
+  - 為年度收款報表、年度薪資報表、年度員工產值分析添加快取機制（年度客戶毛利分析已有）
+  - Purpose: 提升報表載入速度，減少計算開銷
+  - 使用快取鍵格式：`annual:{year}:{reportType}`
+  - 支援 `refresh` 參數強制重新計算
+  - 檢查快取，如果存在且 refresh=0，直接返回快取數據
+  - 如果 refresh=1 或快取不存在，重新計算並更新快取
+  - _Leverage: backend/src/utils/report-cache.js, CacheData table_
+  - _Requirements: BR14.5_
+  - _Prompt: Role: Backend Developer with expertise in caching mechanisms | Task: Add caching mechanism to remaining annual report handlers (annual-revenue, annual-payroll, annual-employee-performance). Use cache key format: annual:{year}:{reportType}. Support refresh parameter to force recalculation. Use getReportCache and setReportCache from backend/src/utils/report-cache.js | Restrictions: Must check cache before calculation, must support refresh parameter, must handle cache misses correctly, must follow existing cache patterns from annual-client-profitability.js | Success: All report handlers use caching correctly, refresh parameter works, cache keys are correct, performance is improved_
+
+- [x] 9. 修改所有年度報表 Handler 支援 refresh 參數
+  - Files:
+    - backend/src/handlers/reports/annual-revenue.js
+    - backend/src/handlers/reports/annual-payroll.js
+    - backend/src/handlers/reports/annual-employee-performance.js
+    - backend/src/handlers/reports/annual-client-profitability.js
+  - 所有年度報表 Handler 已支援 refresh 參數
+  - 遵循 monthly-revenue.js 的模式
+  - 支援 refresh=1 強制重新計算並更新快取
+  - 保持向後兼容性
+  - _Leverage: backend/src/utils/report-cache.js (getReportCache, setReportCache, deleteReportCache)_
+  - _Requirements: BR14.5_
+  - _Completed: 所有年度報表 Handler（annual-revenue、annual-payroll、annual-employee-performance、annual-client-profitability）都已支援 refresh 參數。當 refresh=1 時，會刪除現有快取並強制重新計算，然後更新快取。所有實現都遵循 monthly-revenue.js 的模式，保持向後兼容性。_
+  - Functions: handleAnnualRevenue, handleAnnualPayroll, handleAnnualEmployeePerformance, handleAnnualClientProfitability
+  - 所有年度報表都應該支援 refresh 參數，強制重新計算
+  - Purpose: 統一所有年度報表的快取更新機制，支援手動刷新
+  - 檢查 refresh 參數（參考 monthly-revenue.js 的實作模式）
+  - 當 refresh=1 時，強制重新計算並更新快取
+  - 當 refresh=0 或未提供時，使用快取（如果存在）
+  - 在計算前調用 `deleteReportCache` 清除舊快取（如果 refresh=1）
+  - _Leverage: backend/src/utils/report-cache.js, backend/src/handlers/reports/monthly-revenue.js (參考實作)_
+  - _Requirements: BR14.5_
+  - _Prompt: Role: Backend Developer with expertise in caching and API design | Task: Add refresh parameter support to all annual report handlers, following the pattern from monthly-revenue.js, to force recalculation when refresh=1 | Restrictions: Must follow existing pattern from monthly-revenue.js, must maintain backward compatibility, must update cache after recalculation, must handle refresh parameter correctly | Success: All handlers support refresh parameter, cache is updated correctly when refresh=1, backward compatibility is maintained_
+
+- [x] 10. 實現快取自動失效機制
+  - File: backend/src/utils/cache-invalidation.js (新建)
+  - 當收據、薪資、工時、成本、收費計劃等數據變更時標記快取失效
+  - Purpose: 確保快取數據與實際數據一致
+  - 創建 `invalidateAnnualReportCache` 和 `invalidateCacheByDataType` 函數
+  - 在收據、薪資、工時、成本、收費計劃的 CRUD 操作中調用失效函數
+  - 使用 `deleteReportCache` 刪除對應的快取
+  - 支援批量失效（例如：收據變更時失效所有相關年份的報表快取）
+  - _Leverage: backend/src/utils/report-cache.js, CacheData table_
+  - _Requirements: BR14.5_
+  - _Completed: 已創建 cache-invalidation.js 工具文件，實現了按數據類型和年份失效快取的機制。已整合到所有相關 CRUD 操作：Receipts（創建、更新、刪除、作廢）、PayrollCache（更新）、Timesheets（創建/更新、刪除）、OverheadCosts（創建、更新、刪除）、BillingPlans（創建、更新、刪除）。所有失效操作都使用異步執行，不會阻塞主流程。_
+  - _Prompt: Role: Backend Developer with expertise in cache invalidation | Task: Implement cache invalidation mechanism that marks annual report caches as invalid when source data changes (receipts, payroll, timesheets, costs, billing plans). Create functions to invalidate caches by data type and year, integrate into CRUD operations | Restrictions: Must invalidate correct cache keys, must handle multiple data types, must be efficient, must handle batch invalidation | Success: Cache invalidation works correctly for all data types, correct cache keys are invalidated, mechanism is efficient, integrated into CRUD operations_
+
+- [x] 11. 修改前端年度報表主頁面添加統一刷新按鈕
+  - File: src/views/reports/AnnualReports.vue
+  - 在篩選器區域添加統一刷新按鈕，刷新所有報表
+  - 已添加刷新按鈕，使用 ReloadOutlined 圖標
+  - 實現 handleRefreshAllReports 函數，並行調用所有年度報表 API 並傳遞 refresh=1 參數
+  - 顯示加載狀態和成功/錯誤消息
+  - 更新年度報表 API 函數和 Store actions 支援 refresh 參數
+  - _Completed: 已添加統一刷新按鈕，所有年度報表 API 和 Store actions 都支援 refresh 參數。刷新按鈕會並行調用所有報表 API，顯示加載狀態，並在完成後顯示成功或錯誤消息。_
+  - Purpose: 提供手動刷新功能，強制重新計算所有報表數據
+  - 在篩選器區域添加刷新按鈕（使用 ReloadOutlined 圖標）
+  - 點擊刷新按鈕時，調用所有報表 API 並傳遞 `refresh=1` 參數
+  - 顯示刷新狀態（loading）
+  - 刷新完成後顯示成功提示
+  - 可以保留現有的「全部載入」按鈕，但添加獨立的刷新按鈕
+  - _Leverage: Ant Design Vue Button 組件, src/api/reports.js, src/stores/reports.js_
+  - _Requirements: BR14.5_
+  - _Prompt: Role: Frontend Developer with expertise in Vue 3 Composition API | Task: Add a unified refresh button in the filter section of AnnualReports.vue that refreshes all reports by calling all report APIs with refresh=1 parameter, showing loading state during refresh, displaying success message after refresh | Restrictions: Must use Ant Design Vue Button component, must call all report APIs with refresh=1, must show loading state, must handle errors properly, must display success message | Success: Refresh button is added correctly, all reports are refreshed when clicked, loading state is shown, errors are handled, success message is displayed_
+
+- [x] 12. 修改錯誤處理顯示詳情按鈕
+  - File: src/views/reports/AnnualReports.vue
+  - 顯示錯誤詳情按鈕，預設顯示簡要訊息，點擊可查看詳細錯誤
+  - Purpose: 提供更好的錯誤處理體驗，平衡用戶體驗和除錯需求
+  - 修改錯誤提示組件，預設只顯示簡要錯誤訊息
+  - 添加「查看詳情」按鈕或連結
+  - 點擊後顯示完整錯誤訊息（使用 Collapse 展開）
+  - 記錄完整錯誤堆疊資訊（用於除錯）
+  - 使用 Ant Design Vue Alert 和 Collapse 組件
+  - 更新所有年度報表 Store actions 以存儲詳細錯誤信息
+  - _Completed: 已添加「查看詳情」按鈕和錯誤詳情展開區域。使用 Alert 組件的 action slot 添加「查看詳情」按鈕，使用 Collapse 組件展開顯示完整錯誤信息（包括錯誤訊息、錯誤堆疊、API 響應、請求配置）。所有年度報表 Store actions 都已更新以存儲詳細錯誤信息。_
+  - _Leverage: Ant Design Vue Alert, Modal 或 Collapse 組件_
+  - _Requirements: BR14.6_
+  - _Prompt: Role: Frontend Developer with expertise in Vue 3 and error handling | Task: Modify error handling in AnnualReports.vue to show brief error message by default with a "View Details" button/link that expands to show full error information, using Ant Design Vue Alert and Modal/Collapse components | Restrictions: Must use Ant Design Vue components, must show brief message by default, must allow viewing full details, must handle error stack information | Success: Error handling shows brief message by default, details can be viewed on demand, full error information is accessible, user experience is improved_
+
+- [x] 13. 修改年度報表 API 調用函數支援 refresh 參數
+  - File: src/api/reports.js
+  - Functions: fetchAnnualRevenue, fetchAnnualPayroll, fetchAnnualEmployeePerformance, fetchAnnualClientProfitability
+  - 年度報表 API 函數需要支援 refresh 參數
+  - Purpose: 封裝年度報表 API 調用，提供統一的錯誤處理和數據格式轉換，支援手動刷新
+  - 添加 `options` 參數（參考 `fetchMonthlyRevenue` 的實作模式）
+  - 當 `options.refresh` 為 true 時，傳遞 `refresh=1` 查詢參數
+  - 保持向後兼容（options 為可選參數）
+  - _Leverage: src/api/reports.js (fetchMonthlyRevenue 參考實作), src/api/request.js_
+  - _Completed: 已在任務 11 中完成。所有年度報表 API 函數（fetchAnnualRevenue、fetchAnnualPayroll、fetchAnnualEmployeePerformance、fetchAnnualClientProfitability）都已添加 options 參數支援，當 options.refresh 為 true 時傳遞 refresh=1 查詢參數。所有 Store actions 也已更新支援 options 參數。_
+  - _Requirements: BR14.5_
+  - _Prompt: Role: Frontend Developer with expertise in API integration and Axios | Task: Modify API functions for all annual reports (fetchAnnualRevenue, fetchAnnualPayroll, fetchAnnualEmployeePerformance, fetchAnnualClientProfitability) in src/api/reports.js to support refresh parameter, following the pattern from fetchMonthlyRevenue | Restrictions: Must use axios for HTTP requests, must handle errors properly, must support refresh parameter, must follow existing API patterns, must maintain backward compatibility | Success: All API functions support refresh parameter correctly, error handling works, response format is processed correctly, backward compatibility is maintained_
+
+- [x] 14. 驗證所有報表組件金額格式化
+  - File: src/components/reports/AnnualRevenueReport.vue, AnnualPayrollReport.vue, AnnualEmployeePerformance.vue, AnnualClientProfitability.vue
+  - 金額格式化已正確使用 0 位小數（顯示到元）
+  - Purpose: 統一金額顯示格式，提升可讀性
+  - 驗證 formatCurrency 函數已經實現 0 位小數顯示
+  - 確認所有金額顯示都使用 formatCurrency 函數
+  - _Leverage: src/utils/formatters.js (formatCurrency 函數)_
+  - _Requirements: BR14.1, BR14.2, BR14.3, BR14.4_
+  - _Status: 已完成 - formatCurrency 函數正確使用 0 位小數_
+
+- [x] 15. 驗證年度報表狀態管理
+  - File: src/stores/reports.js
+  - 年度報表狀態管理已實現（載入狀態、錯誤狀態、數據存儲）
+  - Purpose: 管理年度報表的全局狀態，包括列表數據、載入狀態和錯誤信息
+  - _Leverage: Pinia, src/api/reports.js_
+  - _Requirements: BR14.5, BR14.6_
+  - _Status: 已完成 - reports.js store 已包含所有年度報表狀態管理_
+
+- [x] 16. 驗證權限控制
+  - File: backend/src/handlers/reports/index.js, src/router/reports.js
+  - 權限控制已實現，僅管理員可訪問年度報表
+  - Purpose: 確保只有管理員可以訪問年度報表，非管理員用戶無法訪問
+  - _Leverage: backend/src/middleware/auth.js, backend/src/utils/response.js_
+  - _Requirements: BR14.7_
+  - _Status: 已完成 - reports/index.js 中有權限檢查，非管理員返回 403_
+
+- [x] 17. 實現 E2E 測試
+  - File: tests/e2e/reports/annual-reports.spec.ts
+  - 測試年度報表載入、年度切換、手動刷新功能、錯誤處理和詳情查看、明細展開和彈窗顯示、權限控制
+  - Purpose: 確保年度報表功能完整可用，所有功能正常運作
+  - _Completed: 已創建完整的年度報表 E2E 測試套件，包含 10 個測試組：頁面載入和基本顯示、年份切換、手動刷新、錯誤處理和詳情查看、彈窗顯示（薪資明細、員工產值趨勢、客戶分布）、權限控制（管理員訪問和 403 非管理員）、BR1 應計收入計算驗證、標準工時分配驗證、API 驗證、綜合工作流程。所有測試使用 Playwright 框架，包含適當的等待和錯誤處理。_
+  - 測試報表頁面載入
+  - 測試年份切換和報表載入
+  - 測試統一刷新按鈕
+  - 測試錯誤處理和詳情查看
+  - 測試明細展開和彈窗顯示（客戶明細、服務類型明細、員工月度趨勢、客戶分布）
+  - 測試權限控制（管理員訪問和 403 錯誤）
+  - 測試 BR1 應計收入計算邏輯（驗證收入計算正確性）
+  - 測試標準工時分配邏輯（驗證員工收入分配正確性）
+  - _Leverage: Playwright, tests/utils/test-data.ts_
+  - _Requirements: BR14.1, BR14.2, BR14.3, BR14.4, BR14.5, BR14.6, BR14.7_
+  - _Prompt: Role: QA Engineer with expertise in E2E testing and Playwright | Task: Create E2E tests for annual reports functionality including loading, year switching, manual refresh, error handling, detail viewing, modal displays, permission control (admin access and 403 for non-admin), BR1 accrued revenue calculation verification, and standard hours allocation verification. Use Playwright framework and test data utilities | Restrictions: Must use Playwright, must test all report types, must test all interactions including permission control, must use test data utilities, must handle async operations correctly, must verify calculation accuracy | Success: All E2E tests pass, all report types are tested, all interactions work correctly including permission control, tests are maintainable, calculation accuracy is verified_

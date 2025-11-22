@@ -94,3 +94,9 @@ This structure prevents duplication:
 If you are unsure which document to edit, start from the Document Map above; each file includes its purpose to keep the system organized and avoid duplication.
 
 
+
+
+
+
+
+

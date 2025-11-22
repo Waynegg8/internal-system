@@ -7,22 +7,43 @@ import { checkAdminPermission } from './auth'
 export function useCostApi() {
   // 成本項目類型
   const fetchCostTypes = async () => {
-    const response = await request.get('/costs/types')
+    const response = await request.get('/admin/cost-types')
     return response
   }
 
   const createCostType = async (data) => {
-    const response = await request.post('/costs/types', data)
+    const response = await request.post('/admin/cost-types', data)
     return response
   }
 
   const updateCostType = async (id, data) => {
-    const response = await request.put(`/costs/types/${id}`, data)
+    const response = await request.put(`/admin/cost-types/${id}`, data)
     return response
   }
 
   const deleteCostType = async (id) => {
-    const response = await request.delete(`/costs/types/${id}`)
+    const response = await request.delete(`/admin/cost-types/${id}`)
+    return response
+  }
+
+  // 成本項目（保留向後兼容）
+  const fetchCostItems = async () => {
+    const response = await request.get('/costs/items')
+    return response
+  }
+
+  const createCostItem = async (data) => {
+    const response = await request.post('/costs/items', data)
+    return response
+  }
+
+  const updateCostItem = async (id, data) => {
+    const response = await request.put(`/costs/items/${id}`, data)
+    return response
+  }
+
+  const deleteCostItem = async (id) => {
+    const response = await request.delete(`/costs/items/${id}`)
     return response
   }
 
@@ -44,6 +65,27 @@ export function useCostApi() {
 
   const deleteOverheadCost = async (id) => {
     const response = await request.delete(`/costs/overhead/${id}`)
+    return response
+  }
+
+  // 月度管理費用記錄 - 主要 API
+  const fetchCostRecords = async () => {
+    const response = await request.get('/costs/records')
+    return response
+  }
+
+  const createCostRecord = async (data) => {
+    const response = await request.post('/costs/records', data)
+    return response
+  }
+
+  const updateCostRecord = async (id, data) => {
+    const response = await request.put(`/costs/records/${id}`, data)
+    return response
+  }
+
+  const deleteCostRecord = async (id) => {
+    const response = await request.delete(`/costs/records/${id}`)
     return response
   }
 
@@ -89,6 +131,16 @@ export function useCostApi() {
     return response
   }
 
+  // 成本分攤計算
+  const calculateAllocation = async (year, month, allocationMethod) => {
+    const response = await request.post('/costs/allocation/calculate', {
+      year,
+      month,
+      allocation_method: allocationMethod
+    })
+    return response
+  }
+
   // 服務項目
   const fetchServiceItems = async () => {
     const response = await request.get('/services/items')
@@ -102,10 +154,18 @@ export function useCostApi() {
     createCostType,
     updateCostType,
     deleteCostType,
+    fetchCostItems,
+    createCostItem,
+    updateCostItem,
+    deleteCostItem,
     fetchOverheadCosts,
     createOverheadCost,
     updateOverheadCost,
     deleteOverheadCost,
+    fetchCostRecords,
+    createCostRecord,
+    updateCostRecord,
+    deleteCostRecord,
     generateOverheadCosts,
     previewOverheadCostsGeneration,
     fetchOverheadTemplate,
@@ -113,6 +173,7 @@ export function useCostApi() {
     fetchEmployeeCosts,
     fetchClientCostsSummary,
     fetchTaskCosts,
+    calculateAllocation,
     fetchServiceItems,
     checkAdminPermission
   }

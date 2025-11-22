@@ -102,6 +102,20 @@
       </template>
     </a-table>
     
+    <!-- 分頁組件 -->
+    <div v-if="pagination.total > 0" style="margin-top: 16px; display: flex; justify-content: flex-end">
+      <a-pagination
+        v-model:current="currentPage"
+        v-model:page-size="currentPageSize"
+        :total="pagination.total"
+        :show-size-changer="true"
+        :show-quick-jumper="true"
+        :show-total="(total, range) => `第 ${range[0]}-${range[1]} 條，共 ${total} 條`"
+        :page-size-options="['20', '50', '100', '200']"
+        @change="handlePageChange"
+        @show-size-change="handlePageChange"
+      />
+    </div>
   </div>
 </template>
 

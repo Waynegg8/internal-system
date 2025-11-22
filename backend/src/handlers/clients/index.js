@@ -8,6 +8,7 @@ import { handleClientList, handleClientDetail, handleCreateClient, handleUpdateC
 import { handleClientServices, handleServiceItems, handleCreateClientService, handleUpdateClientService, handleDeleteClientService } from "./client-services.js";
 import { handleUpdateClientTags } from "./client-tags.js";
 import { handleGetNextPersonalClientId, handleBatchAssign } from "./client-utils.js";
+import { handleBillingPlans, handleCreateBillingPlan, handleUpdateBillingPlan, handleDeleteBillingPlan, handleAccruedRevenue } from "./client-billing.js";
 import { handleGetCollaborators, handleAddCollaborator, handleRemoveCollaborator } from "./client-collaborators.js";
 
 export async function handleClients(request, env, ctx, requestId, match, url) {
@@ -45,6 +46,32 @@ export async function handleClients(request, env, ctx, requestId, match, url) {
       return await handleGetNextPersonalClientId(request, env, ctx, requestId, url);
     }
     
+    // 收費計劃相關路由（需要在客戶詳情之前檢查）
+    // GET /api/v2/clients/:id/billing/plans - 獲取收費計劃列表
+    if (method === "GET" && path.includes('/billing/plans') && !path.includes('/billing/plans/') && match && match[1]) {
+      return await handleBillingPlans(request, env, ctx, requestId, match, url);
+    }
+    
+    // POST /api/v2/clients/:id/billing/plans - 建立收費計劃
+    if (method === "POST" && path.includes('/billing/plans') && !path.includes('/billing/plans/') && match && match[1]) {
+      return await handleCreateBillingPlan(request, env, ctx, requestId, match, url);
+    }
+    
+    // PUT /api/v2/clients/:id/billing/plans/:planId - 更新收費計劃
+    if (method === "PUT" && path.includes('/billing/plans/') && match && match[1] && match[2]) {
+      return await handleUpdateBillingPlan(request, env, ctx, requestId, match, url);
+    }
+    
+    // DELETE /api/v2/clients/:id/billing/plans/:planIds - 刪除收費計劃（支援批量）
+    if (method === "DELETE" && path.includes('/billing/plans/') && match && match[1] && match[2]) {
+      return await handleDeleteBillingPlan(request, env, ctx, requestId, match, url);
+    }
+    
+    // GET /api/v2/clients/:id/billing/revenue - 獲取應計收入
+    if (method === "GET" && path.includes('/billing/revenue') && match && match[1]) {
+      return await handleAccruedRevenue(request, env, ctx, requestId, match, url);
+    }
+    
     // 協作人員相關路由（需要在客戶詳情之前檢查）
     // GET /api/v2/clients/:clientId/collaborators - 獲取協作人員列表
     if (method === "GET" && path.endsWith('/collaborators') && match && match[1]) {
@@ -61,8 +88,8 @@ export async function handleClients(request, env, ctx, requestId, match, url) {
       return await handleRemoveCollaborator(request, env, ctx, requestId, match, url);
     }
     
-    // GET /api/v2/clients/:id - 客户详情（需要在協作人員之後檢查）
-    if (method === "GET" && match && match[1] && !path.includes('/services') && !path.includes('/tags') && !path.includes('/collaborators')) {
+    // GET /api/v2/clients/:id - 客户详情（需要在協作人員和收費計劃之後檢查）
+    if (method === "GET" && match && match[1] && !path.includes('/services') && !path.includes('/tags') && !path.includes('/collaborators') && !path.includes('/billing')) {
       return await handleClientDetail(request, env, ctx, requestId, match, url);
     }
     
@@ -77,12 +104,12 @@ export async function handleClients(request, env, ctx, requestId, match, url) {
     }
     
     // PUT /api/v2/clients/:id - 更新客户
-    if (method === "PUT" && match && match[1] && !path.endsWith('/tags') && !path.includes('/collaborators')) {
+    if (method === "PUT" && match && match[1] && !path.endsWith('/tags') && !path.includes('/collaborators') && !path.includes('/billing')) {
       return await handleUpdateClient(request, env, ctx, requestId, match, url);
     }
     
     // DELETE /api/v2/clients/:id - 删除客户
-    if (method === "DELETE" && match && match[1] && !path.includes('/collaborators')) {
+    if (method === "DELETE" && match && match[1] && !path.includes('/collaborators') && !path.includes('/billing')) {
       return await handleDeleteClient(request, env, ctx, requestId, match, url);
     }
     

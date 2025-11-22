@@ -152,19 +152,56 @@ const normaliseData = (data) => {
   return null
 }
 
-const cancelRenderTask = () => {
-  if (renderTaskRef.value && typeof renderTaskRef.value.cancel === 'function') {
+const cancelRenderTask = async () => {
+  if (renderTaskRef.value) {
+    const task = renderTaskRef.value
+    renderTaskRef.value = null // 立即清空引用，避免重複取消
+    
     try {
-      renderTaskRef.value.cancel()
+      // 先取消渲染任務
+      if (task && typeof task.cancel === 'function') {
+        task.cancel()
+      }
+      
+      // 等待 Promise 完全完成或被取消（忽略所有錯誤）
+      if (task && task.promise) {
+        try {
+          await Promise.race([
+            task.promise,
+            // 添加超時保護，防止永遠等待
+            new Promise(resolve => setTimeout(resolve, 1000))
+          ])
+        } catch (err) {
+          // 完全忽略所有錯誤，包括 RenderingCancelledException
+          // 這只是確保 Promise 完成
+        }
+      }
     } catch (err) {
-      console.warn('取消 PDF 渲染任務失敗:', err)
+      // 完全忽略所有錯誤，確保不會中斷流程
     }
+    
+    // 額外等待，確保瀏覽器完全清理渲染操作
+    await new Promise(resolve => setTimeout(resolve, 50))
   }
-  renderTaskRef.value = null
+  
+  // 確保等待一個 tick，讓瀏覽器完全清理渲染操作
+  await nextTick()
 }
 
 const resetViewerState = async () => {
-  cancelRenderTask()
+  await cancelRenderTask()
+  
+  // 清空 canvas
+  if (canvasRef.value) {
+    const canvas = canvasRef.value
+    const context = canvas.getContext('2d', { alpha: false })
+    if (context) {
+      context.clearRect(0, 0, canvas.width, canvas.height)
+      canvas.width = 0
+      canvas.height = 0
+    }
+  }
+  
   if (loadingTaskRef.value && typeof loadingTaskRef.value.destroy === 'function') {
     try {
       await loadingTaskRef.value.destroy()
@@ -214,45 +251,116 @@ const renderCurrentPage = async () => {
 
   if (!canvasRef.value) return
 
-  cancelRenderTask()
+  // 先取消並等待前一個渲染任務完全完成清理
+  await cancelRenderTask()
+  
+  // 再次確認沒有殘留的渲染任務
+  if (renderTaskRef.value) {
+    console.warn('[PdfViewer] 警告：仍有殘留的渲染任務，強制清除')
+    renderTaskRef.value = null
+    await nextTick()
+  }
+  
+  // 清空 canvas，確保沒有殘留的渲染操作
+  const canvas = canvasRef.value
+  if (!canvas) {
+    console.error('[PdfViewer] Canvas 不存在')
+    return
+  }
+  
+  // 清空內容並重置尺寸，強制清理渲染上下文
+  const oldContext = canvas.getContext('2d', { alpha: false })
+  if (oldContext) {
+    // 保存舊尺寸
+    const oldWidth = canvas.width
+    const oldHeight = canvas.height
+    
+    // 清空現有內容
+    oldContext.clearRect(0, 0, oldWidth || 1, oldHeight || 1)
+    // 重置變換矩陣
+    oldContext.setTransform(1, 0, 0, 1, 0, 0)
+  }
+  
+  // 重置 canvas 尺寸為 0，強制清理所有渲染狀態
+  canvas.width = 0
+  canvas.height = 0
+  canvas.style.width = '0px'
+  canvas.style.height = '0px'
+  
+  // 等待額外的時間，確保瀏覽器完全清理
+  await nextTick()
+  await new Promise(resolve => setTimeout(resolve, 50))
+  
+  // 再次檢查 canvas 是否存在
+  if (!canvasRef.value || !pdfDocument.value) {
+    return
+  }
+  
   renderingPage.value = true
   errorMessage.value = ''
 
   try {
-    await nextTick()
     const page = await pdfDocument.value.getPage(currentPage.value)
     const viewport = page.getViewport({ scale: 1 })
     const scale = determineScale(viewport)
     const scaledViewport = page.getViewport({ scale })
-    const canvas = canvasRef.value
-    const context = canvas.getContext('2d', { alpha: false })
+    
+    if (!canvasRef.value) {
+      return
+    }
+    
     const devicePixelRatio = window.devicePixelRatio || 1
 
+    // 設置新的 canvas 尺寸（這會創建一個全新的渲染上下文）
     canvas.width = Math.floor(scaledViewport.width * devicePixelRatio)
     canvas.height = Math.floor(scaledViewport.height * devicePixelRatio)
     canvas.style.width = `${scaledViewport.width}px`
     canvas.style.height = `${scaledViewport.height}px`
 
+    // 獲取新的 context（重置尺寸後會自動創建新的 context）
+    const context = canvas.getContext('2d', { alpha: false })
+    
+    // 設置變換矩陣
     if (devicePixelRatio !== 1) {
       context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0)
     } else {
       context.setTransform(1, 0, 0, 1, 0, 0)
     }
 
+    // 填充白色背景
     context.fillStyle = '#ffffff'
     context.fillRect(0, 0, scaledViewport.width, scaledViewport.height)
 
+    // 創建渲染上下文
     const renderContext = {
       canvasContext: context,
       viewport: scaledViewport
     }
 
-    renderTaskRef.value = markRaw(page.render(renderContext))
-    await renderTaskRef.value.promise
+    // 再次確認沒有殘留的渲染任務
+    if (renderTaskRef.value) {
+      console.warn('[PdfViewer] 警告：在開始新渲染前仍有殘留任務，強制清除')
+      renderTaskRef.value = null
+      await nextTick()
+    }
+
+    // 開始渲染
+    const renderTask = page.render(renderContext)
+    renderTaskRef.value = markRaw(renderTask)
+    await renderTask.promise
   } catch (error) {
-    if (error?.name !== 'RenderingCancelledException') {
-      console.error('渲染 PDF 頁面失敗:', error)
+    // 忽略取消錯誤和 canvas 重複使用錯誤
+    const isCancellationError = 
+      error?.name === 'RenderingCancelledException' || 
+      error?.message === 'Rendering cancelled' ||
+      error?.message?.includes('Cannot use the same canvas during multiple render() operations')
+    
+    if (!isCancellationError) {
+      console.error('[PdfViewer] 渲染 PDF 頁面失敗:', error)
       errorMessage.value = error.message || '渲染 PDF 頁面失敗'
+    } else {
+      // 如果是取消錯誤，清空錯誤訊息（這是正常情況）
+      errorMessage.value = ''
     }
   } finally {
     renderingPage.value = false

@@ -35,6 +35,7 @@
       <!-- 篩選工具欄 -->
       <ReceiptFilters
         :filters="store.filters"
+        :clients="clients"
         @filters-change="handleFiltersChange"
         @add-receipt="handleAddReceipt"
       />

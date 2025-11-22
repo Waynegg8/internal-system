@@ -6,7 +6,7 @@
 import { successResponse, errorResponse } from "../../utils/response.js";
 import { getMonthlyRevenueByClient, allocateRevenueByServiceType } from "./revenue-allocation.js";
 import { handleGetClientCosts } from "../costs/task-costs.js";
-import { getReportCache, setReportCache } from "../../utils/report-cache.js";
+import { getReportCache, setReportCache, deleteReportCache } from "../../utils/report-cache.js";
 
 const REPORT_TYPE = "monthly-client-profitability";
 
@@ -104,20 +104,24 @@ export async function handleMonthlyClientProfitability(request, env, ctx, reques
       return errorResponse(422, "VALIDATION_ERROR", "請選擇查詢月份", null, requestId);
     }
 
-    const period = formatMonth(year, month);
-    const cached = await getReportCache(env, REPORT_TYPE, period);
-    if (cached?.data) {
+    const forceRefresh = params.get("refresh") === "1";
+
+    const cached = await getReportCache(env, REPORT_TYPE, year, month);
+    if (!forceRefresh && cached?.data) {
       return successResponse(cached.data, "查詢成功", requestId, {
         cacheHit: true,
         cachedAt: cached.computedAt || null,
       });
+    } else {
+      await deleteReportCache(env, REPORT_TYPE, year, month).catch(() => {});
     }
 
     const data = await computeMonthlyClientProfitability(env, ctx, request, url, year, month);
-    await setReportCache(env, REPORT_TYPE, period, data);
+    await setReportCache(env, REPORT_TYPE, year, data, month);
 
     return successResponse(data, "查詢成功", requestId, {
       cacheHit: false,
+      refreshed: forceRefresh,
     });
   } catch (err) {
     console.error("[MonthlyClientProfitability] Error:", err);

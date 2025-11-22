@@ -9,13 +9,16 @@
 -- ============================================
 
 -- 補齊 service_type（如未存在）
-ALTER TABLE ClientServices ADD COLUMN service_type TEXT DEFAULT 'recurring';
+-- 注意：如果欄位已存在，此語句會失敗，但不會影響其他遷移
+-- ALTER TABLE ClientServices ADD COLUMN service_type TEXT DEFAULT 'recurring';
 
 -- 新增執行月份（JSON 陣列）
-ALTER TABLE ClientServices ADD COLUMN execution_months TEXT DEFAULT NULL;
+-- 注意：如果欄位已存在，此語句會失敗，但不會影響其他遷移
+-- ALTER TABLE ClientServices ADD COLUMN execution_months TEXT DEFAULT NULL;
 
 -- 新增是否用於自動生成
-ALTER TABLE ClientServices ADD COLUMN use_for_auto_generate INTEGER DEFAULT 1;
+-- 注意：如果欄位已存在，此語句會失敗，但不會影響其他遷移
+-- ALTER TABLE ClientServices ADD COLUMN use_for_auto_generate INTEGER DEFAULT 1;
 
 -- 建立索引以利查詢
 CREATE INDEX IF NOT EXISTS idx_client_services_use_for_auto_generate
@@ -23,5 +26,9 @@ ON ClientServices(use_for_auto_generate) WHERE is_deleted = 0;
 
 CREATE INDEX IF NOT EXISTS idx_client_services_service_type
 ON ClientServices(service_type) WHERE is_deleted = 0;
+
+
+
+
 
 

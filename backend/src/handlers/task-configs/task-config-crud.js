@@ -9,17 +9,32 @@ import { generateCacheKey, deleteKVCacheByPrefix, invalidateD1CacheByType } from
  * 獲取客戶服務的任務配置列表
  */
 export async function handleGetTaskConfigs(request, env, ctx, requestId, match, url) {
+  const user = ctx?.user;
+  
+  // 驗證用戶身份
+  if (!user || !user.user_id) {
+    return errorResponse(401, "UNAUTHORIZED", "未登入或身份驗證失敗", null, requestId);
+  }
+  
   const clientId = match[1];
   const clientServiceId = parseInt(match[2]);  // 使用 client_service_id 而非 service_id
   
-  // 驗證客戶服務是否存在
+  // 驗證客戶服務是否存在並獲取客戶負責人信息
   const clientService = await env.DATABASE.prepare(
-    `SELECT client_service_id FROM ClientServices 
-     WHERE client_service_id = ? AND client_id = ? AND is_deleted = 0 LIMIT 1`
+    `SELECT cs.client_service_id, c.assignee_user_id
+     FROM ClientServices cs
+     LEFT JOIN Clients c ON c.client_id = cs.client_id
+     WHERE cs.client_service_id = ? AND cs.client_id = ? AND cs.is_deleted = 0 AND c.is_deleted = 0
+     LIMIT 1`
   ).bind(clientServiceId, clientId).first();
   
   if (!clientService) {
     return errorResponse(404, "NOT_FOUND", "客戶服務不存在", null, requestId);
+  }
+  
+  // 權限檢查：只有管理員或客戶負責人可以查看任務配置
+  if (!user.is_admin && clientService.assignee_user_id !== user.user_id) {
+    return errorResponse(403, "FORBIDDEN", "無權限查看此客戶服務的任務配置", null, requestId);
   }
   
   // 獲取任務配置列表
@@ -74,11 +89,22 @@ export async function handleGetTaskConfigs(request, env, ctx, requestId, match, 
  * 創建任務配置
  */
 export async function handleCreateTaskConfig(request, env, ctx, requestId, match, url) {
-  const clientId = match[1];
-  const clientServiceId = parseInt(match[2]);  // 使用 client_service_id 而非 service_id
   const user = ctx?.user;
   
-  const body = await request.json();
+  // 驗證用戶身份
+  if (!user || !user.user_id) {
+    return errorResponse(401, "UNAUTHORIZED", "未登入或身份驗證失敗", null, requestId);
+  }
+  
+  const clientId = match[1];
+  const clientServiceId = parseInt(match[2]);  // 使用 client_service_id 而非 service_id
+  
+  let body;
+  try {
+    body = await request.json();
+  } catch (error) {
+    return errorResponse(400, "BAD_REQUEST", "請求格式錯誤", null, requestId);
+  }
   const {
     task_name,
     task_description,
@@ -93,7 +119,10 @@ export async function handleCreateTaskConfig(request, env, ctx, requestId, match
     execution_months,
     auto_generate,
     notes,
-    sop_ids
+    sop_ids,
+    generation_time_rule,
+    generation_time_params,
+    is_fixed_deadline
   } = body;
   
   if (!task_name) {
@@ -114,58 +143,91 @@ export async function handleCreateTaskConfig(request, env, ctx, requestId, match
   }
   
   // 權限檢查：只有管理員或客戶負責人可以創建任務配置
-  if (!user.is_admin && clientService.assignee_user_id !== user.user_id) {
+  if (!user.is_admin && Number(clientService.assignee_user_id) !== Number(user.user_id)) {
     return errorResponse(403, "FORBIDDEN", "無權限為此客戶服務新增任務配置", null, requestId);
   }
   
-  // 創建任務配置
-  const result = await env.DATABASE.prepare(
-    `INSERT INTO ClientServiceTaskConfigs 
-     (client_service_id, task_name, task_description, assignee_user_id,
-      estimated_hours, advance_days, due_rule, due_value, days_due, stage_order,
-      execution_frequency, execution_months, auto_generate, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(
-    clientService.client_service_id,
-    task_name,
-    task_description || null,
-    assignee_user_id || null,
-    estimated_hours || null,
-    advance_days || 7,
-    due_rule || 'end_of_month',
-    due_value || null,
-    Number.isFinite(days_due) && days_due >= 0 ? Number(days_due) : null,
-    stage_order || 0,
-    execution_frequency || 'monthly',
-    execution_months ? JSON.stringify(execution_months) : null,
-    auto_generate !== false ? 1 : 0,
-    notes || null
-  ).run();
-  
-  const configId = result.meta?.last_row_id;
-  
-  // 保存 SOP 關聯
-  if (sop_ids && Array.isArray(sop_ids) && sop_ids.length > 0) {
-    for (let i = 0; i < sop_ids.length; i++) {
-      await env.DATABASE.prepare(
-        `INSERT INTO TaskConfigSOPs (config_id, sop_id, sort_order) VALUES (?, ?, ?)`
-      ).bind(configId, sop_ids[i], i).run();
+  // 處理 generation_time_params：如果是對象，轉換為 JSON 字符串
+  let generationTimeParamsValue = null;
+  if (generation_time_params) {
+    if (typeof generation_time_params === 'string') {
+      generationTimeParamsValue = generation_time_params;
+    } else {
+      generationTimeParamsValue = JSON.stringify(generation_time_params);
     }
   }
   
-  return successResponse({ config_id: configId }, "任務配置已創建", requestId);
+  // 處理 is_fixed_deadline：支持 0/1 或 true/false
+  const isFixedDeadlineValue = is_fixed_deadline === 1 || is_fixed_deadline === true ? 1 : 0;
+  
+  try {
+    // 創建任務配置
+    const result = await env.DATABASE.prepare(
+      `INSERT INTO ClientServiceTaskConfigs 
+       (client_service_id, task_name, task_description, assignee_user_id,
+        estimated_hours, advance_days, due_rule, due_value, days_due, stage_order,
+        execution_frequency, execution_months, auto_generate, notes,
+        generation_time_rule, generation_time_params, is_fixed_deadline)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      clientService.client_service_id,
+      task_name,
+      task_description || null,
+      assignee_user_id || null,
+      estimated_hours || null,
+      advance_days || 7,
+      due_rule || 'end_of_month',
+      due_value || null,
+      Number.isFinite(days_due) && days_due >= 0 ? Number(days_due) : null,
+      stage_order || 0,
+      execution_frequency || 'monthly',
+      execution_months ? JSON.stringify(execution_months) : null,
+      auto_generate !== false ? 1 : 0,
+      notes || null,
+      generation_time_rule || null,
+      generationTimeParamsValue,
+      isFixedDeadlineValue
+    ).run();
+    
+    const configId = result.meta?.last_row_id;
+  
+    // 保存 SOP 關聯
+    if (sop_ids && Array.isArray(sop_ids) && sop_ids.length > 0) {
+      for (let i = 0; i < sop_ids.length; i++) {
+        await env.DATABASE.prepare(
+          `INSERT INTO TaskConfigSOPs (config_id, sop_id, sort_order) VALUES (?, ?, ?)`
+        ).bind(configId, sop_ids[i], i).run();
+      }
+    }
+    
+    return successResponse({ config_id: configId }, "任務配置已創建", requestId);
+  } catch (error) {
+    console.error('[CreateTaskConfig] 錯誤:', error);
+    return errorResponse(500, "INTERNAL_ERROR", "創建任務配置失敗", { error: error.message }, requestId);
+  }
 }
 
 /**
  * 更新任務配置
  */
 export async function handleUpdateTaskConfig(request, env, ctx, requestId, match, url) {
+  const user = ctx?.user;
+  
+  // 驗證用戶身份
+  if (!user || !user.user_id) {
+    return errorResponse(401, "UNAUTHORIZED", "未登入或身份驗證失敗", null, requestId);
+  }
+  
   const clientId = match[1];
   const clientServiceId = parseInt(match[2]);  // 使用 client_service_id 而非 service_id
   const configId = parseInt(match[3]);
-  const user = ctx?.user;
   
-  const body = await request.json();
+  let body;
+  try {
+    body = await request.json();
+  } catch (error) {
+    return errorResponse(400, "BAD_REQUEST", "請求格式錯誤", null, requestId);
+  }
   const {
     task_name,
     task_description,
@@ -180,7 +242,10 @@ export async function handleUpdateTaskConfig(request, env, ctx, requestId, match
     execution_months,
     auto_generate,
     notes,
-    sop_ids
+    sop_ids,
+    generation_time_rule,
+    generation_time_params,
+    is_fixed_deadline
   } = body;
   
   // 檢查配置是否存在並獲取客戶負責人信息
@@ -197,8 +262,20 @@ export async function handleUpdateTaskConfig(request, env, ctx, requestId, match
   }
   
   // 權限檢查：只有管理員或客戶負責人可以更新任務配置
-  if (!user.is_admin && existing.assignee_user_id !== user.user_id) {
+  if (!user.is_admin && Number(existing.assignee_user_id) !== Number(user.user_id)) {
     return errorResponse(403, "FORBIDDEN", "無權限修改此任務配置", null, requestId);
+  }
+  
+  // 處理 generation_time_params：如果是對象，轉換為 JSON 字符串
+  let generationTimeParamsValue = undefined;
+  if (generation_time_params !== undefined) {
+    if (generation_time_params === null) {
+      generationTimeParamsValue = null;
+    } else if (typeof generation_time_params === 'string') {
+      generationTimeParamsValue = generation_time_params;
+    } else {
+      generationTimeParamsValue = JSON.stringify(generation_time_params);
+    }
   }
   
   // 更新任務配置
@@ -207,7 +284,11 @@ export async function handleUpdateTaskConfig(request, env, ctx, requestId, match
      SET task_name = ?, task_description = ?, assignee_user_id = ?,
          estimated_hours = ?, advance_days = ?, due_rule = ?, due_value = ?, days_due = ?,
          stage_order = ?, execution_frequency = ?, execution_months = ?,
-         auto_generate = ?, notes = ?, updated_at = datetime('now')
+         auto_generate = ?, notes = ?,
+         generation_time_rule = COALESCE(?, generation_time_rule),
+         generation_time_params = COALESCE(?, generation_time_params),
+         is_fixed_deadline = COALESCE(?, is_fixed_deadline),
+         updated_at = datetime('now')
      WHERE config_id = ?`
   ).bind(
     task_name,
@@ -223,6 +304,9 @@ export async function handleUpdateTaskConfig(request, env, ctx, requestId, match
     execution_months ? JSON.stringify(execution_months) : null,
     auto_generate !== false ? 1 : 0,
     notes || null,
+    generation_time_rule !== undefined ? generation_time_rule : null,
+    generationTimeParamsValue !== undefined ? generationTimeParamsValue : null,
+    is_fixed_deadline !== undefined ? (is_fixed_deadline ? 1 : 0) : null,
     configId
   ).run();
   
@@ -250,10 +334,16 @@ export async function handleUpdateTaskConfig(request, env, ctx, requestId, match
  * 刪除任務配置
  */
 export async function handleDeleteTaskConfig(request, env, ctx, requestId, match, url) {
+  const user = ctx?.user;
+  
+  // 驗證用戶身份
+  if (!user || !user.user_id) {
+    return errorResponse(401, "UNAUTHORIZED", "未登入或身份驗證失敗", null, requestId);
+  }
+  
   const clientId = match[1];
   const clientServiceId = parseInt(match[2]);  // 使用 client_service_id 而非 service_id
   const configId = parseInt(match[3]);
-  const user = ctx?.user;
   
   // 檢查配置是否存在並獲取客戶負責人信息
   const existing = await env.DATABASE.prepare(
@@ -269,7 +359,7 @@ export async function handleDeleteTaskConfig(request, env, ctx, requestId, match
   }
   
   // 權限檢查：只有管理員或客戶負責人可以刪除任務配置
-  if (!user.is_admin && existing.assignee_user_id !== user.user_id) {
+  if (!user.is_admin && Number(existing.assignee_user_id) !== Number(user.user_id)) {
     return errorResponse(403, "FORBIDDEN", "無權限刪除此任務配置", null, requestId);
   }
   
@@ -287,9 +377,15 @@ export async function handleDeleteTaskConfig(request, env, ctx, requestId, match
  * 批量保存任務配置（用於新增/編輯客戶服務時）
  */
 export async function handleBatchSaveTaskConfigs(request, env, ctx, requestId, match, url) {
+  const user = ctx?.user;
+  
+  // 驗證用戶身份
+  if (!user || !user.user_id) {
+    return errorResponse(401, "UNAUTHORIZED", "未登入或身份驗證失敗", null, requestId);
+  }
+  
   const clientId = match[1];
   const clientServiceId = parseInt(match[2]);  // 使用 client_service_id 而非 service_id
-  const user = ctx?.user;
   
   try {
     // 檢查客戶服務是否存在並獲取客戶負責人信息
@@ -306,11 +402,16 @@ export async function handleBatchSaveTaskConfigs(request, env, ctx, requestId, m
     }
     
     // 權限檢查：只有管理員或客戶負責人可以批量保存任務配置
-    if (!user.is_admin && clientService.assignee_user_id !== user.user_id) {
+    if (!user.is_admin && Number(clientService.assignee_user_id) !== Number(user.user_id)) {
       return errorResponse(403, "FORBIDDEN", "無權限批量保存此客戶服務的任務配置", null, requestId);
     }
     
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return errorResponse(400, "BAD_REQUEST", "請求格式錯誤", null, requestId);
+    }
     const { tasks, service_sops } = body;
     
     if (!Array.isArray(tasks)) {
@@ -340,6 +441,11 @@ export async function handleBatchSaveTaskConfigs(request, env, ctx, requestId, m
         return errorResponse(422, "VALIDATION_ERROR", `第 ${i + 1} 個任務的名稱不能為空`, null, requestId);
       }
       
+      // 處理 auto_generate 字段：支持 use_for_auto_generate 和 auto_generate 兩種名稱（向後兼容）
+      const autoGenerate = task.use_for_auto_generate !== undefined 
+        ? (task.use_for_auto_generate === 1 || task.use_for_auto_generate === true ? 1 : 0)
+        : (task.auto_generate !== false ? 1 : 0);
+      
       const result = await env.DATABASE.prepare(
         `INSERT INTO ClientServiceTaskConfigs 
          (client_service_id, task_name, task_description, assignee_user_id,
@@ -359,7 +465,7 @@ export async function handleBatchSaveTaskConfigs(request, env, ctx, requestId, m
         task.stage_order || i,
         task.execution_frequency || 'monthly',
         task.execution_months ? JSON.stringify(task.execution_months) : null,
-        task.auto_generate !== false ? 1 : 0,
+        autoGenerate,
         task.notes || null
       ).run();
       

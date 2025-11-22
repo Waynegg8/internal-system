@@ -456,6 +456,28 @@ export const useCostStore = defineStore('costs', {
       }
     },
     
+    // 成本分攤計算
+    async calculateAllocation(year, month, allocationMethod) {
+      this.loading = true
+      this.error = null
+      try {
+        const response = await useCostApi().calculateAllocation(year, month, allocationMethod)
+        // 處理多種 API 響應格式
+        if (response.ok && response.data) {
+          return response
+        } else if (response.data) {
+          return response
+        } else {
+          throw new Error(response.message || '計算失敗')
+        }
+      } catch (error) {
+        this.error = error.message || '計算失敗'
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
     // 獲取服務項目
     async fetchServiceItems() {
       this.error = null

@@ -105,13 +105,25 @@ const routes = [
   {
     path: '/tasks/overview',
     name: 'TaskOverview',
-    redirect: { name: 'Tasks', query: { view: 'overview' } },
+    redirect: { name: 'Tasks' },
     meta: { requiresAuth: true }
   },
   {
     path: '/tasks/:id',
     name: 'TaskDetail',
     component: () => import('@/views/tasks/TaskDetail.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/tasks/generation/history',
+    name: 'TaskGenerationHistory',
+    component: () => import('@/views/tasks/TaskGenerationHistory.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/notifications',
+    name: 'Notifications',
+    component: () => import('@/views/Notifications.vue'),
     meta: { requiresAuth: true }
   },
   {
@@ -199,6 +211,11 @@ const routes = [
         path: 'items',
         name: 'CostItems',
         component: () => import('@/views/costs/CostItems.vue')
+      },
+      {
+        path: 'records',
+        name: 'CostRecords',
+        component: () => import('@/views/costs/CostRecordsList.vue')
       },
       {
         path: 'employee',
@@ -378,7 +395,7 @@ const titleMap = {
   '/clients/add': '新增客戶',
   '/tasks': '任務管理',
   '/tasks/new': '新增任務',
-  '/tasks/overview': '任務總覽',
+  '/tasks/overview': '任務列表',
   '/timesheets': '工時記錄',
   '/leaves': '假期管理',
   '/trips': '外出記錄',

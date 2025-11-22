@@ -24,6 +24,9 @@
     
     <template #title>
       <span>任務文檔</span>
+      <a-tooltip title="任務文檔：用於存儲任務執行過程中的正式文檔，如合同、報告、財務文件等。這些文檔會同步到知識庫資源中心，可供全公司共享和查閱。">
+        <QuestionCircleOutlined style="margin-left: 8px; color: #999; cursor: help;" />
+      </a-tooltip>
     </template>
     <template #extra>
       <a-upload
@@ -81,7 +84,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePageAlert } from '@/composables/usePageAlert'
-import { UploadOutlined } from '@ant-design/icons-vue'
+import { UploadOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { useTaskStore } from '@/stores/tasks'
 import { formatFileSize, formatDateTime } from '@/utils/formatters'
 
@@ -206,24 +209,35 @@ const handleUpload = async ({ file, onProgress, onSuccess, onError }) => {
 // 處理下載
 const handleDownload = async (record) => {
   try {
-    const fileUrl = record.file_url || record.fileUrl
-    const fileName = record.file_name || record.fileName || 'file'
+    const documentId = record.document_id || record.documentId || record.id
+    const fileName = record.file_name || record.fileName || record.document_name || 'file'
     
-    if (!fileUrl) {
-      showError('文件 URL 不存在')
+    if (!documentId) {
+      showError('文檔 ID 不存在')
+      return
+    }
+    
+    // 通過 API 下載文檔
+    const blob = await store.downloadTaskDocument(props.taskId, documentId)
+    
+    if (!blob || blob.size === 0) {
+      showError('下載失敗：文件為空')
       return
     }
     
     // 創建下載連結
+    const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = fileUrl
+    link.href = url
     link.download = fileName
-    link.target = '_blank'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    
+    showSuccess('下載成功')
   } catch (err) {
-    showError('下載失敗：' + err.message)
+    showError('下載失敗：' + (err.message || '未知錯誤'))
   }
 }
 

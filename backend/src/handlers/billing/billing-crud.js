@@ -486,6 +486,146 @@ export async function handleUpdateBilling(request, env, ctx, requestId, match, u
   return successResponse({ schedule_id: scheduleId }, "已更新", requestId);
 }
 
+/**
+ * 批量刪除收費計劃
+ */
+export async function handleBatchDeleteBilling(request, env, ctx, requestId, url) {
+  const user = ctx?.user;
+  
+  // 驗證用戶身份
+  if (!user || !user.user_id) {
+    return errorResponse(401, "UNAUTHORIZED", "未登入或身份驗證失敗", null, requestId);
+  }
+  
+  let body;
+  try {
+    body = await request.json();
+  } catch (_) {
+    return errorResponse(400, "BAD_REQUEST", "請求格式錯誤", null, requestId);
+  }
+  
+  const scheduleIds = body?.schedule_ids || [];
+  
+  // 驗證輸入參數
+  if (!Array.isArray(scheduleIds) || scheduleIds.length === 0) {
+    return errorResponse(422, "VALIDATION_ERROR", "收費計劃ID列表不能為空", 
+      [{ field: "schedule_ids", message: "必須提供至少一個收費計劃ID" }], requestId);
+  }
+  
+  // 驗證所有 ID 都是有效的數字
+  const validScheduleIds = scheduleIds
+    .map(id => parseInt(id, 10))
+    .filter(id => Number.isInteger(id) && id > 0);
+  
+  if (validScheduleIds.length === 0) {
+    return errorResponse(422, "VALIDATION_ERROR", "無效的收費計劃ID", 
+      [{ field: "schedule_ids", message: "所有ID必須為正整數" }], requestId);
+  }
+  
+  if (validScheduleIds.length !== scheduleIds.length) {
+    return errorResponse(422, "VALIDATION_ERROR", "部分收費計劃ID無效", 
+      [{ field: "schedule_ids", message: "所有ID必須為正整數" }], requestId);
+  }
+  
+  try {
+    // 檢查所有記錄是否存在，並獲取相關的服務資訊用於權限檢查
+    const schedules = await env.DATABASE.prepare(
+      `SELECT sbs.schedule_id, sbs.client_service_id, cs.client_id, c.assignee_user_id
+       FROM ServiceBillingSchedule sbs
+       LEFT JOIN ClientServices cs ON cs.client_service_id = sbs.client_service_id
+       LEFT JOIN Clients c ON c.client_id = cs.client_id
+       WHERE sbs.schedule_id IN (${validScheduleIds.map(() => '?').join(',')})`
+    ).bind(...validScheduleIds).all();
+    
+    if (!schedules?.results || schedules.results.length === 0) {
+      return errorResponse(404, "NOT_FOUND", "未找到任何收費計劃記錄", null, requestId);
+    }
+    
+    // 檢查是否有不存在的記錄
+    const foundIds = new Set(schedules.results.map(s => s.schedule_id));
+    const missingIds = validScheduleIds.filter(id => !foundIds.has(id));
+    if (missingIds.length > 0) {
+      return errorResponse(404, "NOT_FOUND", 
+        `以下收費計劃不存在: ${missingIds.join(', ')}`, null, requestId);
+    }
+    
+    // 權限檢查：管理員或客戶負責人可以刪除
+    const unauthorizedSchedules = schedules.results.filter(s => {
+      if (user.is_admin) return false; // 管理員有權限
+      return Number(s.assignee_user_id) !== Number(user.user_id);
+    });
+    
+    if (unauthorizedSchedules.length > 0) {
+      const unauthorizedIds = unauthorizedSchedules.map(s => s.schedule_id).join(', ');
+      return errorResponse(403, "FORBIDDEN", 
+        `無權限刪除以下收費計劃: ${unauthorizedIds}`, null, requestId);
+    }
+    
+    // 獲取所有受影響的客戶ID，用於清除緩存
+    const affectedClientIds = new Set(
+      schedules.results.map(s => s.client_id).filter(id => id)
+    );
+    
+    // 開始事務處理
+    try { 
+      await env.DATABASE.exec?.("BEGIN"); 
+    } catch (_) { 
+      try { 
+        await env.DATABASE.prepare("BEGIN").run(); 
+      } catch(_){}
+    }
+    
+    // 批量刪除
+    const deleteStatements = validScheduleIds.map(id => 
+      env.DATABASE.prepare(
+        `DELETE FROM ServiceBillingSchedule WHERE schedule_id = ?`
+      ).bind(id)
+    );
+    
+    try {
+      await env.DATABASE.batch(deleteStatements);
+    } catch (batchErr) {
+      // 回滾事務
+      try { 
+        await env.DATABASE.exec?.("ROLLBACK"); 
+      } catch (_) { 
+        try { 
+          await env.DATABASE.prepare("ROLLBACK").run(); 
+        } catch(_){}
+      }
+      console.error('[BatchDeleteBilling] 批量刪除失敗:', batchErr);
+      return errorResponse(500, "INTERNAL_ERROR", 
+        `批量刪除失敗: ${batchErr?.message || batchErr}`, null, requestId);
+    }
+    
+    // 提交事務
+    try { 
+      await env.DATABASE.exec?.("COMMIT"); 
+    } catch (_) { 
+      try { 
+        await env.DATABASE.prepare("COMMIT").run(); 
+      } catch(_){}
+    }
+    
+    // 清除相關緩存
+    await Promise.all(
+      Array.from(affectedClientIds).map(clientId => 
+        deleteKVCacheByPrefix(env, `client_detail:clientId=${clientId}`).catch(() => {})
+      )
+    );
+    
+    return successResponse({
+      deleted_count: validScheduleIds.length,
+      deleted_ids: validScheduleIds
+    }, `已成功刪除 ${validScheduleIds.length} 筆收費計劃`, requestId);
+    
+  } catch (err) {
+    console.error('[BatchDeleteBilling] Error:', err);
+    return errorResponse(500, "INTERNAL_ERROR", 
+      `批量刪除處理失敗: ${err?.message || err}`, null, requestId);
+  }
+}
+
 
 
 

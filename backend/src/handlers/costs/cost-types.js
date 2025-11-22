@@ -45,7 +45,7 @@ export async function handleGetCostTypes(request, env, ctx, requestId, url) {
     `SELECT cost_type_id, cost_code, cost_name, category, allocation_method, description, is_active, display_order, created_at, updated_at
      FROM OverheadCostTypes
      ${whereSql}
-     ORDER BY display_order ASC, cost_code ASC
+     ORDER BY cost_name ASC
      LIMIT ? OFFSET ?`
   ).bind(...binds, perPage, offset).all();
   
@@ -80,7 +80,7 @@ export async function handleCreateCostType(request, env, ctx, requestId, url) {
   const user = ctx?.user;
   const body = await request.json();
   
-  // 不再需要使用者輸入代碼，自動從名稱生成
+  const code = String(body?.cost_code || body?.code || "").trim();
   const name = String(body?.cost_name || body?.name || "").trim();
   let category = String(body?.category || "").trim();
   let methodVal = String(body?.allocation_method || body?.allocationMethod || "").trim();
@@ -100,6 +100,9 @@ export async function handleCreateCostType(request, env, ctx, requestId, url) {
   const description = (body?.description || "").trim();
   
   const errors = [];
+  if (!code) {
+    errors.push({ field: "cost_code", message: "必填" });
+  }
   if (!name || name.length > 50) {
     errors.push({ field: "cost_name", message: "必填且 ≤ 50" });
   }
@@ -112,9 +115,15 @@ export async function handleCreateCostType(request, env, ctx, requestId, url) {
   if (errors.length) {
     return errorResponse(422, "VALIDATION_ERROR", "輸入有誤", errors, requestId);
   }
-  
-  // 自動生成成本類型代碼（從中文名稱）
-  const code = await generateCostTypeCode(env, name);
+
+  // 檢查成本代碼唯一性
+  const existingCode = await env.DATABASE.prepare(
+    `SELECT cost_type_id FROM OverheadCostTypes WHERE cost_code = ?`
+  ).bind(code).first();
+
+  if (existingCode) {
+    return errorResponse(422, "DUPLICATE_CODE", "成本代碼已存在", null, requestId);
+  }
   
   const result = await env.DATABASE.prepare(
     "INSERT INTO OverheadCostTypes (cost_code, cost_name, category, allocation_method, description, is_active) VALUES (?, ?, ?, ?, ?, 1)"
@@ -134,7 +143,8 @@ export async function handleCreateCostType(request, env, ctx, requestId, url) {
 export async function handleUpdateCostType(request, env, ctx, requestId, match, url) {
   const id = parseInt(match[1], 10);
   const body = await request.json();
-  
+
+  const code = String(body?.cost_code || body?.code || "").trim();
   const name = String(body?.cost_name || body?.name || "").trim();
   const category = String(body?.category || "").trim();
   const methodVal = String(body?.allocation_method || body?.allocationMethod || "").trim();
@@ -144,7 +154,21 @@ export async function handleUpdateCostType(request, env, ctx, requestId, match, 
   
   const updates = [];
   const binds = [];
-  
+
+  // 檢查成本代碼唯一性（排除當前項目）
+  if (code) {
+    const existingCode = await env.DATABASE.prepare(
+      `SELECT cost_type_id FROM OverheadCostTypes WHERE cost_code = ? AND cost_type_id != ?`
+    ).bind(code, id).first();
+
+    if (existingCode) {
+      return errorResponse(422, "DUPLICATE_CODE", "成本代碼已存在", null, requestId);
+    }
+
+    updates.push("cost_code = ?");
+    binds.push(code);
+  }
+
   // 如果名称改变，自动重新生成代码
   if (name) {
     updates.push("cost_name = ?");
@@ -218,7 +242,24 @@ export async function handleDeleteCostType(request, env, ctx, requestId, match, 
     if (!existing) {
       return errorResponse(404, "NOT_FOUND", "成本類型不存在", null, requestId);
     }
-    
+
+    // 檢查使用情況 - 檢查 MonthlyOverheadCosts 表
+    const usageInMonthlyCosts = await env.DATABASE.prepare(
+      "SELECT COUNT(1) AS count FROM MonthlyOverheadCosts WHERE cost_type_id = ? AND is_deleted = 0"
+    ).bind(id).first();
+
+    // 檢查使用情況 - 檢查 OverheadRecurringTemplates 表
+    const usageInTemplates = await env.DATABASE.prepare(
+      "SELECT COUNT(1) AS count FROM OverheadRecurringTemplates WHERE cost_type_id = ?"
+    ).bind(id).first();
+
+    if ((usageInMonthlyCosts?.count || 0) > 0 || (usageInTemplates?.count || 0) > 0) {
+      return errorResponse(409, "IN_USE", "該成本項目類型已被使用，無法刪除", {
+        monthlyCostsCount: usageInMonthlyCosts?.count || 0,
+        templatesCount: usageInTemplates?.count || 0
+      }, requestId);
+    }
+
     // 以交易方式刪除相關資料
     await env.DATABASE.batch([
       env.DATABASE.prepare(

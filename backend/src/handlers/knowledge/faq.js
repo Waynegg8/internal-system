@@ -74,20 +74,22 @@ export async function handleGetFAQList(request, env, ctx, requestId, url) {
   
   // 查询数据
   const rows = await env.DATABASE.prepare(
-    `SELECT 
-      faq_id, 
-      question, 
-      answer, 
-      category, 
-      scope,
-      client_id,
-      tags, 
-      created_by, 
-      created_at, 
-      updated_at
-    FROM InternalFAQ
+    `SELECT
+      f.faq_id,
+      f.question,
+      f.answer,
+      f.category,
+      f.scope,
+      f.client_id,
+      f.tags,
+      f.created_by,
+      f.created_at,
+      f.updated_at,
+      u.name as created_by_name
+    FROM InternalFAQ f
+    LEFT JOIN Users u ON f.created_by = u.user_id
     ${whereSql}
-    ORDER BY updated_at DESC
+    ORDER BY f.updated_at DESC
     LIMIT ? OFFSET ?`
   ).bind(...binds, perPage, offset).all();
   
@@ -97,11 +99,12 @@ export async function handleGetFAQList(request, env, ctx, requestId, url) {
     answer: row.answer,
     category: row.category || "",
     scope: row.scope || null,
-    clientId: row.client_id || null,
+    client_id: row.client_id || null,
     tags: row.tags ? row.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-    createdBy: row.created_by,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    created_by: row.created_by,
+    created_by_name: row.created_by_name || "未知",
+    created_at: row.created_at,
+    updated_at: row.updated_at
   }));
   
   // 保存到 KV 缓存
@@ -120,27 +123,29 @@ export async function handleGetFAQList(request, env, ctx, requestId, url) {
  */
 export async function handleGetFAQDetail(request, env, ctx, requestId, match, url) {
   const faqId = match[1];
-  
+
   const faq = await env.DATABASE.prepare(`
-    SELECT 
-      faq_id, 
-      question, 
-      answer, 
-      category, 
-      scope,
-      client_id,
-      tags, 
-      created_by, 
-      created_at, 
-      updated_at
-    FROM InternalFAQ
-    WHERE faq_id = ? AND is_deleted = 0
+    SELECT
+      faq.faq_id,
+      faq.question,
+      faq.answer,
+      faq.category,
+      faq.scope,
+      faq.client_id,
+      faq.tags,
+      faq.created_by,
+      faq.created_at,
+      faq.updated_at,
+      users.name as created_by_name
+    FROM InternalFAQ faq
+    LEFT JOIN Users users ON faq.created_by = users.user_id
+    WHERE faq.faq_id = ? AND faq.is_deleted = 0
   `).bind(faqId).first();
-  
+
   if (!faq) {
     return errorResponse(404, "NOT_FOUND", "FAQ不存在", null, requestId);
   }
-  
+
   const data = {
     faq_id: faq.faq_id,
     question: faq.question,
@@ -150,10 +155,11 @@ export async function handleGetFAQDetail(request, env, ctx, requestId, match, ur
     clientId: faq.client_id || null,
     tags: faq.tags ? faq.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
     createdBy: faq.created_by,
+    createdByName: faq.created_by_name || "未知",
     createdAt: faq.created_at,
     updatedAt: faq.updated_at
   };
-  
+
   return successResponse(data, "查詢成功", requestId);
 }
 
@@ -252,6 +258,15 @@ export async function handleUpdateFAQ(request, env, ctx, requestId, match, url) 
   if (body.hasOwnProperty('client_id')) {
     updates.push("client_id = ?");
     binds.push(body.client_id ? parseInt(body.client_id) : null);
+  }
+  if (body.hasOwnProperty('scope')) {
+    const scope = String(body.scope || "").trim();
+    // 驗證 scope 必須是 'service' 或 'task'
+    if (scope && scope !== 'service' && scope !== 'task') {
+      return errorResponse(422, "VALIDATION_ERROR", "適用層級必須是 'service' 或 'task'", [{ field: "scope", message: "適用層級必須是 'service' 或 'task'" }], requestId);
+    }
+    updates.push("scope = ?");
+    binds.push(scope || null);
   }
   
   if (updates.length === 0) {

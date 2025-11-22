@@ -18,7 +18,10 @@ export const useReceiptStore = defineStore('receipts', {
       status: 'all',
       receipt_type: 'all',
       dateFrom: '',
-      dateTo: ''
+      dateTo: '',
+      client_id: '',
+      billing_month: null,
+      billing_year: null
     }
   }),
   
@@ -138,11 +141,11 @@ export const useReceiptStore = defineStore('receipts', {
     },
     
     // 作廢收據
-    async cancelReceipt(receiptId) {
+    async cancelReceipt(receiptId, cancellationReason) {
       this.loading = true
       this.error = null
       try {
-        const response = await useReceiptApi().cancelReceipt(receiptId)
+        const response = await useReceiptApi().cancelReceipt(receiptId, { cancellation_reason: cancellationReason })
         return response
       } catch (error) {
         this.error = error.message
@@ -198,7 +201,10 @@ export const useReceiptStore = defineStore('receipts', {
         status: 'all',
         receipt_type: 'all',
         dateFrom: '',
-        dateTo: ''
+        dateTo: '',
+        client_id: '',
+        billing_month: null,
+        billing_year: null
       }
     }
   }

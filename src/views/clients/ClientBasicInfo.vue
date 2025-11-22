@@ -53,7 +53,7 @@
       <a-row :gutter="24">
         <!-- 負責人員 -->
         <a-col :span="12">
-          <a-form-item label="負責人員" name="assigneeUserId">
+          <a-form-item label="負責人員" name="assigneeUserId" :rules="[{ required: true, message: '請選擇負責人員', trigger: 'change' }]">
             <a-select
               v-model:value="formState.assigneeUserId"
               placeholder="請選擇負責人員"
@@ -282,6 +282,28 @@
   </a-card>
 </template>
 
+/**
+ * ClientBasicInfo.vue
+ * 
+ * 客戶詳情頁 - 基本資訊分頁組件
+ * 
+ * 功能概述:
+ * - 顯示和編輯客戶基本資訊（公司名稱、聯絡資訊、負責人等）
+ * - 管理客戶標籤
+ * - 管理客戶協作者
+ * - 編輯股東持股資訊
+ * - 編輯董監事資訊
+ * - 表單驗證和錯誤處理
+ * 
+ * 權限控制:
+ * - 統一編號為只讀，不可修改
+ * - 只有管理員或客戶負責人可以管理協作者
+ * - 只有管理員或客戶負責人可以管理標籤
+ * 
+ * 相關文件:
+ * - Requirements: .spec-workflow/specs/br1-3-1-client-detail-basic/requirements.md
+ * - Tasks: .spec-workflow/specs/br1-3-1-client-detail-basic/tasks.md
+ */
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
@@ -336,7 +358,8 @@ const formState = reactive({
 
 // 表單驗證規則
 const formRules = {
-  companyName: [{ required: true, message: '請輸入公司名稱', trigger: 'blur' }]
+  companyName: [{ required: true, message: '請輸入公司名稱', trigger: 'blur' }],
+  assigneeUserId: [{ required: true, message: '請選擇負責人員', trigger: 'change' }]
 }
 
 // 用戶列表
@@ -744,9 +767,9 @@ const handleSave = async () => {
     // 更新客戶標籤
     await updateClientTags(clientId, tagIds || [])
 
-    // 刷新客戶詳情和標籤列表
+    // 刷新客戶詳情和標籤列表（保存後強制刷新以獲取最新數據）
     await Promise.all([
-      clientStore.fetchClientDetail(clientId),
+      clientStore.fetchClientDetail(clientId, { forceRefresh: true }),
       loadAllTags() // 重新加載標籤列表，以獲取最新創建的標籤
     ])
 

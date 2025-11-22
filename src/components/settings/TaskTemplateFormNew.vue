@@ -66,6 +66,7 @@
               v-model:value="formData.client_id"
               placeholder="通用模板（不綁定客戶）"
               allow-clear
+              @change="handleClientChange"
             >
               <a-select-option
                 v-for="client in clients"
@@ -131,6 +132,7 @@
 import { ref, computed, watch } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import TaskConfiguration from '@/components/clients/TaskConfiguration.vue'
+import { fetchTaskTemplates } from '@/api/task-templates'
 
 const props = defineProps({
   visible: {
@@ -201,22 +203,98 @@ const selectedServiceSOP = computed(() => {
   return null
 })
 
-// 表單驗證規則
-const formRules = {
-  template_name: [
-    { required: true, message: '請輸入模板名稱', trigger: 'blur' },
-    { max: 100, message: '模板名稱不能超過 100 個字符', trigger: 'blur' }
-  ],
-  service_id: [
-    { required: true, message: '請選擇服務項目', trigger: 'change' }
-  ]
+// 檢查統一模板唯一性（異步驗證）
+const validateUnifiedTemplateUniqueness = async (rule, value) => {
+  // 如果沒有選擇服務，不進行唯一性檢查
+  if (!formData.value.service_id) {
+    return Promise.resolve()
+  }
+  
+  // 如果選擇了客戶（客戶專屬模板），不需要檢查統一模板唯一性
+  if (formData.value.client_id !== null && formData.value.client_id !== undefined) {
+    return Promise.resolve()
+  }
+  
+  // 統一模板（client_id 為 null），需要檢查唯一性
+  try {
+    // 獲取該服務的所有模板
+    const response = await fetchTaskTemplates({
+      service_id: formData.value.service_id,
+      client_type: 'unified'
+    })
+    
+    const templates = response?.data || []
+    
+    // 編輯模式下，排除當前模板
+    const currentTemplateId = props.editingTemplate?.template_id || props.editingTemplate?.templateId
+    
+    // 過濾掉當前編輯的模板
+    const existingTemplates = templates.filter(
+      t => (t.template_id || t.templateId) !== currentTemplateId
+    )
+    
+    // 如果已存在統一模板，返回錯誤
+    if (existingTemplates.length > 0) {
+      const existingTemplate = existingTemplates[0]
+      const templateName = existingTemplate.template_name || existingTemplate.templateName || '未知模板'
+      return Promise.reject(
+        new Error(`該服務已存在統一模板「${templateName}」，每個服務只能有一個統一模板`)
+      )
+    }
+    
+    return Promise.resolve()
+  } catch (error) {
+    console.error('檢查統一模板唯一性失敗:', error)
+    // 如果檢查失敗，不阻止提交（由後端驗證）
+    return Promise.resolve()
+  }
 }
+
+// 表單驗證規則
+const formRules = computed(() => {
+  return {
+    template_name: [
+      { required: true, message: '請輸入模板名稱', trigger: 'blur' },
+      { max: 100, message: '模板名稱不能超過 100 個字符', trigger: 'blur' }
+    ],
+    service_id: [
+      { required: true, message: '請選擇服務項目', trigger: 'change' },
+      {
+        validator: validateUnifiedTemplateUniqueness,
+        trigger: ['change', 'blur']
+      }
+    ],
+    client_id: [
+      {
+        validator: validateUnifiedTemplateUniqueness,
+        trigger: ['change', 'blur']
+      }
+    ]
+  }
+})
 
 // 處理服務變更
 const handleServiceChange = () => {
   // 清空任務配置（因為服務變更了）
   formData.value.tasks = []
   formData.value.service_sops = []
+  
+  // 觸發統一模板唯一性驗證
+  if (formRef.value) {
+    formRef.value.validateFields(['service_id', 'client_id']).catch(() => {
+      // 驗證失敗時不處理，錯誤會顯示在表單上
+    })
+  }
+}
+
+// 處理客戶變更
+const handleClientChange = () => {
+  // 觸發統一模板唯一性驗證
+  if (formRef.value) {
+    formRef.value.validateFields(['service_id', 'client_id']).catch(() => {
+      // 驗證失敗時不處理，錯誤會顯示在表單上
+    })
+  }
 }
 
 // 監聽 editingTemplate 變化，預填充表單

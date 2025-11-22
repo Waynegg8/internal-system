@@ -6,7 +6,7 @@
 import { errorResponse, successResponse } from "../../utils/response.js";
 import { handleGetSOPList, handleGetSOPDetail, handleCreateSOP, handleUpdateSOP, handleDeleteSOP } from "./sop.js";
 import { handleGetFAQList, handleGetFAQDetail, handleCreateFAQ, handleUpdateFAQ, handleDeleteFAQ } from "./faq.js";
-import { handleGetDocumentsList, handleGetDocumentDetail, handleUploadDocument, handleUpdateDocument, handleDeleteDocument, handleDownloadDocument } from "./documents.js";
+import { handleGetDocumentsList, handleGetDocumentDetail, handleUploadDocument, handleUpdateDocument, handleDeleteDocument, handleBatchDeleteDocuments, handleDownloadDocument, handleGetPreviewUrl, handlePreviewDocument } from "./documents.js";
 
 export async function handleKnowledge(request, env, ctx, requestId, match, url) {
   const method = request.method.toUpperCase();
@@ -76,8 +76,20 @@ export async function handleKnowledge(request, env, ctx, requestId, match, url) 
       return await handleDeleteDocument(request, env, ctx, requestId, match, url);
     }
     
+    if (method === "DELETE" && path === '/api/v2/documents/batch') {
+      return await handleBatchDeleteDocuments(request, env, ctx, requestId, url);
+    }
+    
     if (method === "GET" && path.match(/^\/api\/v2\/documents\/(\d+)\/download$/)) {
       return await handleDownloadDocument(request, env, ctx, requestId, match, url);
+    }
+    
+    if (method === "GET" && path.match(/^\/api\/v2\/documents\/(\d+)\/preview-url$/)) {
+      return await handleGetPreviewUrl(request, env, ctx, requestId, match, url);
+    }
+    
+    if (method === "GET" && path.match(/^\/api\/v2\/documents\/(\d+)\/preview$/)) {
+      return await handlePreviewDocument(request, env, ctx, requestId, match, url);
     }
     
     // GET /api/v2/settings/sops - 获取SOP列表（用于系统设定）

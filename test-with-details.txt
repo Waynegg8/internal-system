@@ -1,0 +1,73 @@
+
+Running 1 test using 1 worker
+
+
+
+[1A[2K(node:14636) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K(node:14636) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[1/1] [chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:84:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.1: 任務自動生成邏輯 › 管理員應該能夠手動觸發任務生成
+[1A[2K[chromium] › tests\e2e\tasks\task-auto-generation-br2-5.spec.ts:84:5 › BR2.5: 任務自動生成 - 完整測試套件 › BR2.5.1: 任務自動生成邏輯 › 管理員應該能夠手動觸發任務生成
+BR2.5 測試數據設置完成: {
+  testClients: [
+    {
+      clientId: [32m'0085236862'[39m,
+      companyName: [32m'BR2.5測試客戶有限公司-1763685236862'[39m,
+      taxId: [32m'85236862'[39m
+    }
+  ],
+  testClientServices: [
+    {
+      clientServiceId: [33m701[39m,
+      clientId: [32m'0085236862'[39m,
+      serviceId: [33m83[39m,
+      serviceName: [32m'年度稅務申報服務'[39m,
+      serviceType: [32m'recurring'[39m
+    }
+  ],
+  testTaskConfigs: [
+    {
+      configId: [33m1191[39m,
+      clientServiceId: [33m701[39m,
+      taskName: [32m'BR2.5測試任務-服務月份開始時'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m1192[39m,
+      clientServiceId: [33m701[39m,
+      taskName: [32m'BR2.5測試任務-前一個月最後3天'[39m,
+      generationTimeRule: [32m'prev_month_last_x_days'[39m,
+      generationTimeParams: [32m'{"days":3}'[39m,
+      isFixedDeadline: [33mfalse[39m
+    },
+    {
+      configId: [33m1193[39m,
+      clientServiceId: [33m701[39m,
+      taskName: [32m'BR2.5測試任務-固定期限'[39m,
+      generationTimeRule: [32m'service_month_start'[39m,
+      generationTimeParams: [32m'{}'[39m,
+      isFixedDeadline: [33mtrue[39m
+    }
+  ],
+  adminUserId: [33m50[39m,
+  employeeUserId: [33m62[39m
+}
+
+[1A[2K[測試] 任務生成耗時: 1.82秒
+
+[1A[2K[測試] 生成結果: {
+  generated: [33m1[39m,
+  skipped: [33m29[39m,
+  processedServices: [33m0[39m,
+  totalServices: [33m53[39m,
+  queryCount: [33m4[39m
+}
+
+[1A[2K[測試] 實際生成 1 個任務，每個任務平均 1.821 秒
+
+[1A[2K  1 passed (27.6s)

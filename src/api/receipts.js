@@ -29,8 +29,8 @@ export function useReceiptApi() {
   }
 
   // 刪除/作廢收據
-  const cancelReceipt = async (receiptId) => {
-    const response = await request.post(`/receipts/${receiptId}/cancel`)
+  const cancelReceipt = async (receiptId, payload = {}) => {
+    const response = await request.post(`/receipts/${receiptId}/cancel`, payload)
     return response
   }
 

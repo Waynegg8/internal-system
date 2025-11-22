@@ -9,16 +9,35 @@
   >
     <template #action>
       <a-space>
-        <a-button type="primary" size="small" @click="handleBatchStatus">
+        <a-button 
+          type="primary" 
+          size="small" 
+          :disabled="selectedCount === 0"
+          @click="handleBatchStatus"
+        >
           批量變更狀態
         </a-button>
-        <a-button type="primary" size="small" @click="handleBatchDueDate">
+        <a-button 
+          type="primary" 
+          size="small" 
+          :disabled="selectedCount === 0"
+          @click="handleBatchDueDate"
+        >
           批量調整到期日
         </a-button>
-        <a-button type="primary" size="small" @click="handleBatchAssignee">
+        <a-button 
+          type="primary" 
+          size="small" 
+          :disabled="selectedCount === 0"
+          @click="handleBatchAssignee"
+        >
           批量分配負責人
         </a-button>
-        <a-button size="small" @click="handleClear">
+        <a-button 
+          size="small" 
+          :disabled="selectedCount === 0"
+          @click="handleClear"
+        >
           清除選擇
         </a-button>
       </a-space>
@@ -52,6 +71,10 @@ const handleClear = () => {
   emit('clear')
 }
 </script>
+
+
+
+
 
 
 

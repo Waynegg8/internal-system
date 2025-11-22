@@ -12,6 +12,21 @@ export const tasksRoutes = [
     handler: withAuth(handleTasks),
   },
   {
+    pattern: /^\/api\/v2\/tasks\/batch$/,
+    methods: ["POST"],
+    handler: withAuth(handleTasks),
+  },
+  {
+    pattern: /^\/api\/v2\/tasks\/stats$/,
+    methods: ["GET"],
+    handler: withAuth(handleTasks),
+  },
+  {
+    pattern: /^\/api\/v2\/tasks\/default-date-range$/,
+    methods: ["GET"],
+    handler: withAuth(handleTasks),
+  },
+  {
     pattern: /^\/api\/v2\/tasks\/overview$/,
     methods: ["GET"],
     handler: withAuth(handleTasks),
@@ -49,6 +64,11 @@ export const tasksRoutes = [
   {
     pattern: /^\/api\/v2\/tasks\/(\d+)\/documents$/,
     methods: ["GET", "POST"],
+    handler: withAuth(handleTasks),
+  },
+  {
+    pattern: /^\/api\/v2\/tasks\/(\d+)\/documents\/(\d+)\/download$/,
+    methods: ["GET"],
     handler: withAuth(handleTasks),
   },
   {

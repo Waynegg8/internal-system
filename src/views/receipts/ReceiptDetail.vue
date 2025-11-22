@@ -90,6 +90,12 @@
         <!-- 收款記錄 -->
         <ReceiptPaymentsTable
           :payments="receipt.payments || receipt.receipt_payments || []"
+          style="margin-bottom: 24px"
+        />
+
+        <!-- 編輯歷史 -->
+        <ReceiptEditHistory
+          :edit-history="receipt.edit_history || []"
         />
       </div>
       
@@ -116,6 +122,20 @@
       :receipt-id="receiptId"
       @success="handleEditReceiptSuccess"
     />
+
+    <!-- 作廢收據彈窗 -->
+    <ReceiptCancelModal
+      v-model:visible="cancelReceiptModalVisible"
+      :receipt="receipt"
+      @success="handleCancelReceiptSuccess"
+    />
+
+    <!-- 列印選擇彈窗 -->
+    <ReceiptPrintModal
+      v-model:visible="printModalVisible"
+      :receipt="receipt"
+      @success="handlePrintSuccess"
+    />
   </div>
 </template>
 
@@ -129,8 +149,11 @@ import { usePageAlert } from '@/composables/usePageAlert'
 import ReceiptInfo from '@/components/receipts/ReceiptInfo.vue'
 import ReceiptItemsTable from '@/components/receipts/ReceiptItemsTable.vue'
 import ReceiptPaymentsTable from '@/components/receipts/ReceiptPaymentsTable.vue'
+import ReceiptEditHistory from '@/components/receipts/ReceiptEditHistory.vue'
 import PaymentFormModal from '@/components/receipts/PaymentFormModal.vue'
 import EditReceiptModal from '@/components/receipts/EditReceiptModal.vue'
+import ReceiptCancelModal from '@/components/receipts/ReceiptCancelModal.vue'
+import ReceiptPrintModal from '@/components/receipts/ReceiptPrintModal.vue'
 import { printInvoice, printReceipt } from '@/utils/receiptPrint'
 
 const route = useRoute()
@@ -147,6 +170,8 @@ const receiptId = computed(() => route.params.id)
 // 本地狀態
 const paymentModalVisible = ref(false)
 const editReceiptModalVisible = ref(false)
+const cancelReceiptModalVisible = ref(false)
+const printModalVisible = ref(false)
 
 // 計算屬性
 const receipt = computed(() => currentReceipt.value)
@@ -211,14 +236,20 @@ const handleEditReceiptSuccess = async (payload) => {
 }
 
 // 處理作廢收據
-const handleCancelReceipt = async () => {
+const handleCancelReceipt = () => {
+  cancelReceiptModalVisible.value = true
+}
+
+// 處理作廢收據成功
+const handleCancelReceiptSuccess = async (payload) => {
   try {
-    await store.cancelReceipt(receiptId.value)
+    await store.cancelReceipt(receiptId.value, payload.cancellationReason)
     showSuccess('收據已作廢')
     // 跳轉到收據列表
     router.push('/receipts')
   } catch (err) {
     showError(err.message || '作廢收據失敗')
+    throw err // 重新拋出錯誤，讓彈窗保持打開狀態
   }
 }
 
@@ -230,13 +261,19 @@ const handleCloseError = () => {
 // 處理列印請款單
 const handlePrintInvoice = () => {
   if (!receipt.value) return
-  printInvoice(receipt.value)
+  printModalVisible.value = true
 }
 
 // 處理列印收據
 const handlePrintReceipt = () => {
   if (!receipt.value) return
-  printReceipt(receipt.value)
+  printModalVisible.value = true
+}
+
+// 處理列印成功
+const handlePrintSuccess = (payload) => {
+  // 列印已在組件內處理，這裡只需要關閉彈窗
+  printModalVisible.value = false
 }
 
 // 監聽路由參數變化，重新載入收據詳情

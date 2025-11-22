@@ -102,6 +102,79 @@ export async function handleDeleteTaskDocument(request, env, ctx, requestId, mat
 }
 
 /**
+ * 下载任务文档
+ */
+export async function handleDownloadTaskDocument(request, env, ctx, requestId, match, url) {
+  const user = ctx?.user;
+  
+  // 验证用户身份
+  if (!user || !user.user_id) {
+    return errorResponse(401, "UNAUTHORIZED", "未登入或身份驗證失敗", null, requestId);
+  }
+  
+  const taskId = match[1];
+  const documentId = match[2];
+  
+  try {
+    // 检查任务是否存在
+    const task = await env.DATABASE.prepare(`
+      SELECT task_id, assignee_user_id FROM ActiveTasks 
+      WHERE task_id = ? AND is_deleted = 0
+    `).bind(taskId).first();
+    
+    if (!task) {
+      return errorResponse(404, "NOT_FOUND", "任務不存在", null, requestId);
+    }
+    
+    // 权限检查：只有管理员或任务负责人可以下载
+    if (!user.is_admin && Number(task.assignee_user_id) !== Number(user.user_id)) {
+      return errorResponse(403, "FORBIDDEN", "無權下載此文檔", null, requestId);
+    }
+    
+    // 检查文档是否存在且属于该任务
+    const document = await env.DATABASE.prepare(`
+      SELECT document_id, file_url, file_name, file_type, uploaded_by
+      FROM InternalDocuments 
+      WHERE document_id = ? AND related_task_id = ? AND is_deleted = 0
+    `).bind(documentId, taskId).first();
+    
+    if (!document) {
+      return errorResponse(404, "NOT_FOUND", "文檔不存在", null, requestId);
+    }
+    
+    // 检查 R2 是否配置
+    if (!env.R2_BUCKET) {
+      return errorResponse(500, "CONFIG_ERROR", "R2 存储未配置", null, requestId);
+    }
+    
+    // 从 R2 获取文件
+    const object = await env.R2_BUCKET.get(document.file_url);
+    
+    if (!object) {
+      return errorResponse(404, "FILE_NOT_FOUND", "文件不存在於存儲中", null, requestId);
+    }
+    
+    // 设置文件名，确保正确编码
+    const fileName = document.file_name || 'file';
+    const encodedFileName = encodeURIComponent(fileName);
+    
+    // 返回文件流
+    return new Response(object.body, {
+      status: 200,
+      headers: {
+        'Content-Type': document.file_type || 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${encodedFileName}"; filename*=UTF-8''${encodedFileName}`,
+        'Cache-Control': 'private, max-age=3600'
+      }
+    });
+    
+  } catch (err) {
+    console.error(`[Tasks] Download document error:`, err);
+    return errorResponse(500, "DOWNLOAD_ERROR", "下載失敗", null, requestId);
+  }
+}
+
+/**
  * 上传任务文档
  */
 export async function handleUploadTaskDocument(request, env, ctx, requestId, match, url) {

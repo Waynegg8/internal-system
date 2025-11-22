@@ -2,8 +2,9 @@
  * 任务生成器路由
  */
 
-import { handleManualTaskGeneration, handleTaskGenerationPreview } from "../handlers/task-generator.js";
-import { withAdmin } from "../middleware/auth.js";
+import { handleManualTaskGeneration, handleTaskGenerationPreview, handleGenerateTasksForOneTimeService } from "../handlers/task-generator/index.js";
+import { handleGetTaskGenerationHistory } from "../handlers/task-generator/task-generation-history.js";
+import { withAdmin, withAuth } from "../middleware/auth.js";
 
 export const taskGeneratorRoutes = [
   {
@@ -21,6 +22,18 @@ export const taskGeneratorRoutes = [
     pattern: /^\/api\/v2\/settings\/automation\/preview$/,
     methods: ["GET"],
     handler: withAdmin(handleTaskGenerationPreview),
+  },
+  // 一次性服務任務生成
+  {
+    pattern: /^\/api\/v2\/tasks\/generate\/one-time$/,
+    methods: ["POST"],
+    handler: withAuth(handleGenerateTasksForOneTimeService),
+  },
+  // 任務生成歷史記錄查詢
+  {
+    pattern: /^\/api\/v2\/admin\/tasks\/generate\/history$/,
+    methods: ["GET"],
+    handler: withAdmin(handleGetTaskGenerationHistory),
   },
 ];
 

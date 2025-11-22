@@ -62,7 +62,9 @@ export const useClientAddStore = defineStore('clientAdd', {
         this.supportData.tags = extractApiArray(tagsResponse, [])
         
         const servicesResponse = await fetchAllServices()
-        this.supportData.services = extractApiArray(servicesResponse, [])
+        const services = extractApiArray(servicesResponse, [])
+        // 使用 Vue 的響應式方式設置數組
+        this.supportData.services.splice(0, this.supportData.services.length, ...services)
         
         const sopsResponse = await fetchAllSOPs({ per_page: 1000 })
         this.supportData.sops = extractApiArray(sopsResponse, [])
@@ -72,6 +74,11 @@ export const useClientAddStore = defineStore('clientAdd', {
       } finally {
         this.loading = false
       }
+    },
+    
+    // 設置服務數據（用於直接設置）
+    setServices(services) {
+      this.supportData.services.splice(0, this.supportData.services.length, ...services)
     },
 
     // 獲取下一個個人客戶編號（統一編號就是客戶編號）
@@ -133,9 +140,17 @@ export const useClientAddStore = defineStore('clientAdd', {
     // 添加臨時服務
     async addTempService(service) {
       const tempServiceId = `temp_${Date.now()}`
+      
+      // 確保 service_id 是真正的服務ID，不是臨時ID
+      let actualServiceId = service.service_id || service.id
+      if (!actualServiceId || String(actualServiceId).startsWith('temp_')) {
+        console.error('[addTempService] 無效的 service_id:', actualServiceId, 'service:', service)
+        throw new Error('服務ID無效，請重新選擇服務')
+      }
+      
       const newService = {
         id: tempServiceId,
-        service_id: service.id || service.service_id,
+        service_id: actualServiceId, // 確保使用真正的服務ID（不是臨時ID）
         name: service.name || service.service_name,
         status: service.status || 'active',
         service_type: service.service_type || 'recurring',

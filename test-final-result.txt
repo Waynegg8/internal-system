@@ -1,0 +1,25 @@
+SyntaxError: C:\Users\miama\Desktop\system-new\tests\e2e\tasks\task-auto-generation-br2-5.spec.ts: Identifier 'task' has already been declared. (226:14)
+
+  224 |         expect(service.tasks.length).toBeGreaterThan(0)
+  225 |         
+> 226 |         const task = service.tasks.find((t: any) => t.config_id === config.configId)
+      |               ^
+  227 |         expect(task).toBeDefined()
+  228 |         expect(task?.generation_time).toBeDefined()
+  229 |         
+
+   at tasks\task-auto-generation-br2-5.spec.ts:226
+
+  224 |         expect(service.tasks.length).toBeGreaterThan(0)
+  225 |         
+> 226 |         const task = service.tasks.find((t: any) => t.config_id === config.configId)
+      |              ^
+  227 |         expect(task).toBeDefined()
+  228 |         expect(task?.generation_time).toBeDefined()
+  229 |         
+
+Error: No tests found.
+Make sure that arguments are regular expressions matching test files.
+You may need to escape symbols like "$" or "*" and quote the arguments.
+
+[1A[2K
